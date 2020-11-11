@@ -1,0 +1,49 @@
+Name:           {{{git_name name="tree-sitter"}}}
+Version:        {{{git_version lead="$(git tag | sort --version-sort -r | head -n1)"}}}
+Release:        {{{git_revision 1}}}%{?dist}
+
+License:        MIT
+Summary:        Incremental parsing system for programming tools
+Url:            https://tree-sitter.github.io
+
+Source0:        {{{git_pack}}}
+
+BuildRequires:  gcc
+
+%description
+Tree-sitter is a parser generator tool and an incremental parsing library. It
+can build a concrete syntax tree for a source file and efficiently update the
+syntax tree as the source file is edited.
+
+%package devel
+Summary:        Tree-sitter development package
+Requires:       %{name}%{?_isa} = %{version}-%{release}
+
+%description devel
+Tree-sitter development package
+
+%global debug_package %{nil}
+
+%prep
+{{{git_setup_macro}}}
+
+%build
+%make_build PREFIX=%{_prefix} LIBDIR=%{_libdir}
+
+%install
+%make_install PREFIX=%{_prefix} LIBDIR=%{_libdir}
+
+%files
+%license LICENSE
+%doc README.md
+%{_libdir}/libtree-sitter.so.*
+
+%files devel
+%{_includedir}/tree_sitter
+%{_libdir}/libtree-sitter.a
+%{_libdir}/libtree-sitter.so
+%{_libdir}/pkgconfig/tree-sitter.pc
+
+%changelog
+* {{{git_changelog_date}}} Aron Griffis <aron@scampersand.com> - {{{git_changelog_version}}}
+- Nightly build from git master
