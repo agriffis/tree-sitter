@@ -83,6 +83,11 @@ jobs:
           script/generate-fixtures --build
           script/generate-fixtures-wasm
 
+      - name: List scratch folder
+        run: |
+          echo ${{ env.TREE_SITTER_LIBDIR }}
+          ls -lh ${{ env.TREE_SITTER_LIBDIR }}
+
       - name: Install latest nextest release
         uses: taiki-e/install-action@nextest
 
@@ -153,6 +158,11 @@ jobs:
         run: |
           script/fetch-fixtures.cmd
           script/generate-fixtures.cmd --build
+
+      - name: List scratch folder
+        run: |
+          echo ${{ env.TREE_SITTER_LIBDIR }}
+          dir ${{ env.TREE_SITTER_LIBDIR }}
 
       - name: Install latest nextest release
         uses: taiki-e/install-action@nextest
