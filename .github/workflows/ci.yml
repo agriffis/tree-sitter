@@ -13,6 +13,8 @@ on:
 env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: 0
+  RUST_BACKTRACE: 1
+  TREE_SITTER_LIBDIR: "$GITHUB_WORKSPACE/target/scratch"
 
 jobs:
   unix-tests:
