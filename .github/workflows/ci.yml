@@ -32,7 +32,7 @@ jobs:
 
       - name: Set TREE_SITTER_LIBDIR to a scratch dir
         run: |
-          echo TREE_SITTER_LIBDIR=${{ env.GITHUB_WORKSPACE }}/target/scratch >> $GITHUB_ENV
+          echo TREE_SITTER_LIBDIR=${{ github.workspace }}/target/scratch >> $GITHUB_ENV
 
       # Work around https://github.com/actions/cache/issues/403.
       - name: Use GNU tar
@@ -135,7 +135,7 @@ jobs:
       # >> Variables in the env map cannot be defined in terms of other variables in the map.
       - name: Set TREE_SITTER_LIBDIR to a scratch dir
         run: |
-          echo TREE_SITTER_LIBDIR=${{ env.GITHUB_WORKSPACE }}\target\scratch >> $GITHUB_ENV
+          echo TREE_SITTER_LIBDIR=${{ github.workspace }}\target\scratch >> $GITHUB_ENV
 
       - name: Cache artifacts
         id: cache
