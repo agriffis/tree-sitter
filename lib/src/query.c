@@ -1436,7 +1436,7 @@ static bool ts_query__analyze_patterns(TSQuery *self, unsigned *error_offset) {
       }
     }
   }
-  
+
   // Walk forward through all of the steps in the query, computing some
   // basic information about each step. Mark all of the steps that contain
   // captures, and record the indices of all of the steps that have child steps.
@@ -1697,7 +1697,7 @@ static bool ts_query__analyze_patterns(TSQuery *self, unsigned *error_offset) {
     bool did_abort_analysis = false;
     array_clear(&final_step_indices);
     array_clear(&finished_parent_symbols);
-    
+
     #ifdef DEBUG_ANALYZE_QUERY
       printf("\nWalk states for %s:\n", ts_language_symbol_name(self->language, states.contents[0]->stack[0].parent_symbol));
     #endif
@@ -1856,14 +1856,14 @@ static bool ts_query__analyze_patterns(TSQuery *self, unsigned *error_offset) {
       }
     }
   #endif
-  
+
   // Determine which repetition symbols in this language have the possibility
   // of matching non-rooted patterns in this query. These repetition symbols
   // prevent certain optimizations with range restrictions.
   bool did_abort_analysis = false;
   for (uint32_t i = 0; i < non_rooted_pattern_start_steps.size; i++) {
     uint16_t step_index = non_rooted_pattern_start_steps.contents[i];
-    
+
     analysis_state_set__clear(&states, &state_pool);
     analysis_state_set__clear(&deeper_states, &state_pool);
 
@@ -1889,7 +1889,7 @@ static bool ts_query__analyze_patterns(TSQuery *self, unsigned *error_offset) {
         }));
       }
     }
-    
+
     #ifdef DEBUG_ANALYZE_QUERY
       printf("\nWalk states for rootless pattern step %u:\n", step_index);
     #endif
@@ -1913,7 +1913,7 @@ static bool ts_query__analyze_patterns(TSQuery *self, unsigned *error_offset) {
       array_insert_sorted_by(&self->repeat_symbols_with_rootless_patterns, , symbol);
     }
   }
-  
+
   #ifdef DEBUG_ANALYZE_QUERY
     if (self->repeat_symbols_with_rootless_patterns.size > 0) {
       printf("\nRepetition symbols with rootless patterns:\n");
@@ -3822,7 +3822,7 @@ static inline bool ts_query_cursor__advance(
           self->start_byte
         );
       }
-      
+
       if (should_descend && ts_tree_cursor_goto_first_child(&self->cursor)) {
         self->depth++;
       } else {
