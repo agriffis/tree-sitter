@@ -5,7 +5,7 @@
 
 Name:           {{{git_name name="tree-sitter"}}}
 Version:        {{{git_version lead="$(git tag | grep -v pre-release | sort --version-sort -r | head -n1)"}}}
-Release:        {{{git_revision 1}}}%{?dist}
+Release:        {{{git_revision}}}%{?dist}
 Summary:        An incremental parsing system for programming tools
 
 License:        MIT
