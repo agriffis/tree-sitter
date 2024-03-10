@@ -1,7 +1,10 @@
+# avoid rpm build error empty file debugfiles.list
+%global debug_package %{nil}
+
 %global treesitter_so_version 0
 
 Name:           {{{git_name name="tree-sitter"}}}
-Version:        {{{git_version lead="$(git tag | sort --version-sort -r | head -n1)"}}}
+Version:        {{{git_version lead="$(git tag | grep -v pre-release | sort --version-sort -r | head -n1)"}}}
 Release:        {{{git_revision 1}}}%{?dist}
 Summary:        An incremental parsing system for programming tools
 
