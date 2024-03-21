@@ -17,6 +17,7 @@
 "realloc",
 "strcmp",
 "strlen",
+"strncmp",
 "strncpy",
 "towlower",
 "towupper",
