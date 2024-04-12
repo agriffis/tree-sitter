@@ -1,3 +1,11 @@
+use core::ops::Range;
+use std::{
+    cmp,
+    collections::{HashMap, HashSet},
+    fmt::Write,
+    mem::swap,
+};
+
 use super::{
     char_tree::{CharacterTree, Comparator},
     grammars::{ExternalToken, LexicalGrammar, SyntaxGrammar, VariableType},
@@ -6,13 +14,6 @@ use super::{
         AdvanceAction, FieldLocation, GotoAction, LexState, LexTable, ParseAction, ParseTable,
         ParseTableEntry,
     },
-};
-use core::ops::Range;
-use std::{
-    cmp,
-    collections::{HashMap, HashSet},
-    fmt::Write,
-    mem::swap,
 };
 
 const LARGE_CHARACTER_RANGE_COUNT: usize = 8;
@@ -28,7 +29,7 @@ macro_rules! add {
 }
 
 macro_rules! add_whitespace {
-    ($this: tt) => {{
+    ($this:tt) => {{
         for _ in 0..$this.indent_level {
             write!(&mut $this.buffer, "  ").unwrap();
         }
@@ -44,13 +45,13 @@ macro_rules! add_line {
 }
 
 macro_rules! indent {
-    ($this: tt) => {
+    ($this:tt) => {
         $this.indent_level += 1;
     };
 }
 
 macro_rules! dedent {
-    ($this: tt) => {
+    ($this:tt) => {
         assert_ne!($this.indent_level, 0);
         $this.indent_level -= 1;
     };
@@ -177,8 +178,8 @@ impl Generator {
             }
             // Two anonymous tokens with different flags but the same string value
             // should be represented with the same symbol in the public API. Examples:
-            // *  "<" and token(prec(1, "<"))
-            // *  "(" and token.immediate("(")
+            // * "<" and token(prec(1, "<"))
+            // * "(" and token.immediate("(")
             else if symbol.is_terminal() {
                 let metadata = self.metadata_for_symbol(*symbol);
                 for other_symbol in &self.parse_table.symbols {
@@ -220,22 +221,22 @@ impl Generator {
                     });
 
                     // Some aliases match an existing symbol in the grammar.
-                    let alias_id;
-                    if let Some(existing_symbol) = existing_symbol {
-                        alias_id = self.symbol_ids[&self.symbol_map[&existing_symbol]].clone();
+                    let alias_id = if let Some(existing_symbol) = existing_symbol {
+                        self.symbol_ids[&self.symbol_map[&existing_symbol]].clone()
                     }
-                    // Other aliases don't match any existing symbol, and need their own identifiers.
+                    // Other aliases don't match any existing symbol, and need their own
+                    // identifiers.
                     else {
                         if let Err(i) = self.unique_aliases.binary_search(alias) {
                             self.unique_aliases.insert(i, alias.clone());
                         }
 
-                        alias_id = if alias.is_named {
+                        if alias.is_named {
                             format!("alias_sym_{}", self.sanitize_identifier(&alias.value))
                         } else {
                             format!("anon_alias_sym_{}", self.sanitize_identifier(&alias.value))
-                        };
-                    }
+                        }
+                    };
 
                     self.alias_ids.entry(alias.clone()).or_insert(alias_id);
                 }
@@ -870,39 +871,40 @@ impl Generator {
             line_break.push_str("  ");
         }
 
-        // parenthesis needed if we add the `!eof` condition to explicitly avoid confusion with
-        // precedence of `&&` and `||`
-        let (mut need_open_paren, mut need_close_paren) = (false, false);
         for (i, range) in ranges.iter().enumerate() {
             if is_included {
                 if i > 0 {
                     add!(self, " ||{line_break}");
                 }
+                // parenthesis needed if we add the `!eof` condition to explicitly avoid confusion with
+                // precedence of `&&` and `||`
+                let mut close_paren = false;
                 if range.start == '\0' {
-                    add!(self, "!eof && ");
-                    (need_open_paren, need_close_paren) = (true, true);
+                    add!(self, "(!eof && ");
+                    close_paren = true;
                 }
                 if range.end == range.start {
-                    if need_open_paren {
-                        add!(self, "(");
-                        need_open_paren = false;
-                    }
                     add!(self, "lookahead == ");
                     self.add_character(range.start);
-                    if need_close_paren && i == ranges.len() - 1 {
-                        add!(self, ")");
-                        need_close_paren = false;
-                    }
                 } else if range.end as u32 == range.start as u32 + 1 {
+                    if close_paren {
+                        add!(self, "(");
+                    }
                     add!(self, "lookahead == ");
                     self.add_character(range.start);
                     add!(self, " ||{line_break}lookahead == ");
                     self.add_character(range.end);
+                    if close_paren {
+                        add!(self, ")");
+                    }
                 } else {
                     add!(self, "(");
                     self.add_character(range.start);
                     add!(self, " <= lookahead && lookahead <= ");
                     self.add_character(range.end);
+                    add!(self, ")");
+                }
+                if close_paren {
                     add!(self, ")");
                 }
             } else {
@@ -1298,16 +1300,9 @@ impl Generator {
                     } => {
                         add!(
                             self,
-                            "REDUCE(.symbol = {}, .child_count = {child_count}",
+                            "REDUCE({}, {child_count}, {dynamic_precedence}, {production_id})",
                             self.symbol_ids[&symbol]
                         );
-                        if dynamic_precedence != 0 {
-                            add!(self, ", .dynamic_precedence = {dynamic_precedence}");
-                        }
-                        if production_id != 0 {
-                            add!(self, ", .production_id = {production_id}");
-                        }
-                        add!(self, ")");
                     }
                 }
                 add!(self, ",");
@@ -1359,7 +1354,7 @@ impl Generator {
 
         add_line!(
             self,
-            "TS_PUBLIC const TSLanguage *{language_function_name}() {{",
+            "TS_PUBLIC const TSLanguage *{language_function_name}(void) {{",
         );
         indent!(self);
         add_line!(self, "static const TSLanguage language = {{");
@@ -1679,16 +1674,15 @@ impl Generator {
 /// * `parse_table` - The generated parse table for the language
 /// * `main_lex_table` - The generated lexing table for the language
 /// * `keyword_lex_table` - The generated keyword lexing table for the language
-/// * `keyword_capture_token` - A symbol indicating which token is used
-///    for keyword capture, if any.
+/// * `keyword_capture_token` - A symbol indicating which token is used for keyword capture, if any.
 /// * `syntax_grammar` - The syntax grammar extracted from the language's grammar
 /// * `lexical_grammar` - The lexical grammar extracted from the language's grammar
-/// * `default_aliases` - A map describing the global rename rules that should apply.
-///    the keys are symbols that are *always* aliased in the same way, and the values
-///    are the aliases that are applied to those symbols.
-/// * `abi_version` - The language ABI version that should be generated. Usually
-///    you want Tree-sitter's current version, but right after making an ABI
-///    change, it may be useful to generate code with the previous ABI.
+/// * `default_aliases` - A map describing the global rename rules that should apply. the keys are
+///   symbols that are *always* aliased in the same way, and the values are the aliases that are
+///   applied to those symbols.
+/// * `abi_version` - The language ABI version that should be generated. Usually you want
+///   Tree-sitter's current version, but right after making an ABI change, it may be useful to
+///   generate code with the previous ABI.
 #[allow(clippy::too_many_arguments)]
 pub fn render_c_code(
     name: &str,
