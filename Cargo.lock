@@ -1389,6 +1389,7 @@ dependencies = [
  "bindgen",
  "cc",
  "regex",
+ "tree-sitter-language",
  "wasmtime-c-api-impl",
 ]
 
@@ -1432,6 +1433,7 @@ dependencies = [
  "tree-sitter-tags",
  "tree-sitter-tests-proc-macro",
  "unindent",
+ "url",
  "walkdir",
  "wasmparser 0.206.0",
  "webbrowser",
@@ -1456,6 +1458,10 @@ dependencies = [
  "thiserror",
  "tree-sitter",
 ]
+
+[[package]]
+name = "tree-sitter-language"
+version = "0.1.0"
 
 [[package]]
 name = "tree-sitter-loader"
