@@ -25,12 +25,10 @@ harness = false
 wasm = ["tree-sitter/wasm", "tree-sitter-loader/wasm"]
 
 [dependencies]
-ansi_term.workspace = true
 anstyle.workspace = true
 anyhow.workspace = true
 clap.workspace = true
 ctrlc.workspace = true
-difference.workspace = true
 dirs.workspace = true
 filetime.workspace = true
 glob.workspace = true
@@ -48,6 +46,7 @@ semver.workspace = true
 serde.workspace = true
 serde_derive.workspace = true
 serde_json.workspace = true
+similar.workspace = true
 smallbitvec.workspace = true
 tiny_http.workspace = true
 walkdir.workspace = true
