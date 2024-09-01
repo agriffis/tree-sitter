@@ -1381,6 +1381,20 @@ impl<'tree> Node<'tree> {
         Self::new(unsafe { ffi::ts_node_prev_named_sibling(self.0) })
     }
 
+    /// Get the node's first child that extends beyond the given byte offset.
+    #[doc(alias = "ts_node_first_child_for_byte")]
+    #[must_use]
+    pub fn first_child_for_byte(&self, byte: usize) -> Option<Self> {
+        Self::new(unsafe { ffi::ts_node_first_child_for_byte(self.0, byte as u32) })
+    }
+
+    /// Get the node's first named child that extends beyond the given byte offset.
+    #[doc(alias = "ts_node_first_named_child_for_point")]
+    #[must_use]
+    pub fn first_named_child_for_byte(&self, byte: usize) -> Option<Self> {
+        Self::new(unsafe { ffi::ts_node_first_named_child_for_byte(self.0, byte as u32) })
+    }
+
     /// Get the node's number of descendants, including one for the node itself.
     #[doc(alias = "ts_node_descendant_count")]
     #[must_use]
@@ -2360,6 +2374,26 @@ impl QueryCursor {
         unsafe {
             ffi::ts_query_cursor_set_match_limit(self.ptr.as_ptr(), limit);
         }
+    }
+
+    /// Set the maximum duration in microseconds that query execution should be allowed to
+    /// take before halting.
+    ///
+    /// If query execution takes longer than this, it will halt early, returning None.
+    #[doc(alias = "ts_query_cursor_set_timeout_micros")]
+    pub fn set_timeout_micros(&mut self, timeout: u64) {
+        unsafe {
+            ffi::ts_query_cursor_set_timeout_micros(self.ptr.as_ptr(), timeout);
+        }
+    }
+
+    /// Get the duration in microseconds that query execution is allowed to take.
+    ///
+    /// This is set via [`set_timeout_micros`](QueryCursor::set_timeout_micros).
+    #[doc(alias = "ts_query_cursor_timeout_micros")]
+    #[must_use]
+    pub fn timeout_micros(&self) -> u64 {
+        unsafe { ffi::ts_query_cursor_timeout_micros(self.ptr.as_ptr()) }
     }
 
     /// Check if, on its last execution, this cursor exceeded its maximum number
