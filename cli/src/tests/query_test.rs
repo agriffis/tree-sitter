@@ -7,6 +7,7 @@ use tree_sitter::{
     CaptureQuantifier, Language, Node, Parser, Point, Query, QueryCursor, QueryError,
     QueryErrorKind, QueryPredicate, QueryPredicateArg, QueryProperty,
 };
+use tree_sitter_generate::generate_parser_for_grammar;
 use unindent::Unindent;
 
 use super::helpers::{
@@ -14,12 +15,9 @@ use super::helpers::{
     fixtures::{get_language, get_test_language},
     query_helpers::{assert_query_matches, Match, Pattern},
 };
-use crate::{
-    generate::generate_parser_for_grammar,
-    tests::{
-        helpers::query_helpers::{collect_captures, collect_matches},
-        ITERATION_COUNT,
-    },
+use crate::tests::{
+    helpers::query_helpers::{collect_captures, collect_matches},
+    ITERATION_COUNT,
 };
 
 lazy_static! {
@@ -3918,7 +3916,7 @@ fn test_query_random() {
                 .matches(
                     &query,
                     test_tree.root_node(),
-                    (include_str!("parser_test.rs")).as_bytes(),
+                    include_bytes!("parser_test.rs").as_ref(),
                 )
                 .map(|mat| Match {
                     last_node: None,
@@ -5137,7 +5135,7 @@ fn test_query_wildcard_with_immediate_first_child() {
 fn test_query_on_empty_source_code() {
     let language = get_language("javascript");
     let source_code = "";
-    let query = r#"(program) @program"#;
+    let query = "(program) @program";
     let query = Query::new(&language, query).unwrap();
     assert_query_matches(
         &language,
