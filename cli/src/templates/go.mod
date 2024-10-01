@@ -1,5 +1,5 @@
-module github.com/tree-sitter/tree-sitter-LOWER_PARSER_NAME
+module PARSER_URL_STRIPPED
 
-go 1.23
+go 1.22
 
 require github.com/tree-sitter/go-tree-sitter v0.23.1

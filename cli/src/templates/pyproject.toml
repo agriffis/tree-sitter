@@ -4,22 +4,23 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tree-sitter-PARSER_NAME"
-description = "CAMEL_PARSER_NAME grammar for tree-sitter"
-version = "0.0.1"
+description = "PARSER_DESCRIPTION"
+version = "PARSER_VERSION"
 keywords = ["incremental", "parsing", "tree-sitter", "PARSER_NAME"]
 classifiers = [
   "Intended Audience :: Developers",
   "License :: OSI Approved :: MIT License",
   "Topic :: Software Development :: Compilers",
   "Topic :: Text Processing :: Linguistic",
-  "Typing :: Typed"
+  "Typing :: Typed",
 ]
+authors = [{ name = "PARSER_AUTHOR_NAME", email = "PARSER_AUTHOR_EMAIL" }]
 requires-python = ">=3.9"
-license.text = "MIT"
+license.text = "PARSER_LICENSE"
 readme = "README.md"
 
 [project.urls]
-Homepage = "https://github.com/tree-sitter/tree-sitter-PARSER_NAME"
+Homepage = "PARSER_URL"
 
 [project.optional-dependencies]
 core = ["tree-sitter~=0.22"]
