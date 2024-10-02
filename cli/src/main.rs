@@ -443,15 +443,8 @@ impl InitConfig {
 
 impl Init {
     fn run(self, current_dir: &Path, migrated: bool) -> Result<()> {
-        let configure_json = if current_dir.join("tree-sitter.json").exists() {
-            Confirm::with_theme(&ColorfulTheme::default())
-                .with_prompt("It looks like you already have a `tree-sitter.json` file. Do you want to re-configure it?")
-                .interact()?
-        } else if current_dir.join("package.json").exists() {
-            !migrated
-        } else {
-            true
-        };
+        let configure_json = !current_dir.join("tree-sitter.json").exists()
+            && (!current_dir.join("package.json").exists() || !migrated);
 
         let (language_name, json_config_opts) = if configure_json {
             let mut opts = JsonConfigOpts::default();
@@ -469,10 +462,20 @@ impl Init {
                     .interact_text()
             };
 
-            let upper_camel_name = |name: &str| {
+            let camelcase_name = |name: &str| {
                 Input::<String>::with_theme(&ColorfulTheme::default())
-                    .with_prompt("UpperCamelCase name")
+                    .with_prompt("CamelCase name")
                     .default(name.to_upper_camel_case())
+                    .validate_with(|input: &String| {
+                        if input
+                            .chars()
+                            .all(|c| c.is_ascii_alphabetic() || c.is_ascii_digit() || c == '_')
+                        {
+                            Ok(())
+                        } else {
+                            Err("The name must contain only letters, digits, and underscores")
+                        }
+                    })
                     .interact_text()
             };
 
@@ -506,6 +509,13 @@ impl Init {
                 Input::<String>::with_theme(&ColorfulTheme::default())
                     .with_prompt("TextMate scope")
                     .default(format!("source.{name}"))
+                    .validate_with(|input: &String| {
+                        if input.starts_with("source.") || input.starts_with("text.") {
+                            Ok(())
+                        } else {
+                            Err("The scope must start with 'source.' or 'text.'")
+                        }
+                    })
                     .interact_text()
             };
 
@@ -549,20 +559,21 @@ impl Init {
 
             let email = || {
                 Input::with_theme(&ColorfulTheme::default())
-                 .with_prompt("Author email")
-                 .validate_with({
-                    let mut force = None;
-                    move |input: &String| -> Result<(), &str> {
-                        if input.contains('@') || input.trim().is_empty() || force.as_ref().map_or(false, |old| old == input) {
-                            Ok(())
-                        } else {
-                            force = Some(input.clone());
-                            Err("This is not an email address; type the same value again to force use")
+                    .with_prompt("Author email")
+                    .validate_with({
+                        move |input: &String| -> Result<(), &str> {
+                            if (input.contains('@') && input.contains('.'))
+                                || input.trim().is_empty()
+                            {
+                                Ok(())
+                            } else {
+                                Err("This is not a valid email address")
+                            }
                         }
-                    }
-                 })
-                 .allow_empty(true)
-                 .interact_text().map(|e| (!e.trim().is_empty()).then_some(e))
+                    })
+                    .allow_empty(true)
+                    .interact_text()
+                    .map(|e| (!e.trim().is_empty()).then_some(e))
             };
 
             let url = || {
@@ -582,7 +593,7 @@ impl Init {
 
             let choices = [
                 "name",
-                "upper_camel_name",
+                "camelcase",
                 "description",
                 "repository",
                 "scope",
@@ -599,7 +610,7 @@ impl Init {
                 ($choice:expr) => {
                     match $choice {
                         "name" => opts.name = name()?,
-                        "upper_camel_name" => opts.upper_camel_name = upper_camel_name(&opts.name)?,
+                        "camelcase" => opts.camelcase = camelcase_name(&opts.name)?,
                         "description" => opts.description = description(&opts.name)?,
                         "repository" => opts.repository = Some(repository(&opts.name)?),
                         "scope" => opts.scope = scope(&opts.name)?,
