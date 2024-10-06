@@ -6,7 +6,7 @@ use std::{
 
 use anstyle::{AnsiColor, Color, Style};
 use anyhow::{anyhow, Context, Result};
-use clap::{crate_authors, Args, Command, FromArgMatches as _, Subcommand};
+use clap::{crate_authors, Args, Command, FromArgMatches as _, Subcommand, ValueEnum};
 use clap_complete::{generate, Shell};
 use dialoguer::{theme::ColorfulTheme, Confirm, FuzzySelect, Input};
 use glob::glob;
@@ -103,6 +103,13 @@ struct Generate {
     pub libdir: Option<String>,
     #[arg(
         long,
+        short,
+        value_name = "DIRECTORY",
+        help = "The path to output the generated source files"
+    )]
+    pub output: Option<String>,
+    #[arg(
+        long,
         help = "Produce a report of the states for the given rule, use `-` to report every rule"
     )]
     pub report_states_for_rule: Option<String>,
@@ -191,7 +198,7 @@ struct Parse {
     )]
     pub edits: Option<Vec<String>>,
     #[arg(long, help = "The encoding of the input files")]
-    pub encoding: Option<String>,
+    pub encoding: Option<Encoding>,
     #[arg(
         long,
         help = "Open `log.html` in the default browser, if `--debug-graph` is supplied"
@@ -206,6 +213,13 @@ struct Parse {
     pub rebuild: bool,
     #[arg(long, help = "Omit ranges in the output")]
     pub no_ranges: bool,
+}
+
+#[derive(ValueEnum, Clone)]
+pub enum Encoding {
+    Utf8,
+    Utf16LE,
+    Utf16BE,
 }
 
 #[derive(Args)]
@@ -686,6 +700,7 @@ impl Generate {
                 });
         tree_sitter_generate::generate_parser_in_directory(
             current_dir,
+            self.output.as_deref(),
             self.grammar_path.as_deref(),
             abi_version,
             self.report_states_for_rule.as_deref(),
@@ -773,15 +788,11 @@ impl Parse {
             ParseOutput::Normal
         };
 
-        let encoding = if let Some(encoding) = self.encoding {
-            match encoding.as_str() {
-                "utf16" => Some(ffi::TSInputEncodingUTF16),
-                "utf8" => Some(ffi::TSInputEncodingUTF8),
-                _ => return Err(anyhow!("Invalid encoding. Expected one of: utf8, utf16")),
-            }
-        } else {
-            None
-        };
+        let encoding = self.encoding.map(|e| match e {
+            Encoding::Utf8 => ffi::TSInputEncodingUTF8,
+            Encoding::Utf16LE => ffi::TSInputEncodingUTF16LE,
+            Encoding::Utf16BE => ffi::TSInputEncodingUTF16BE,
+        });
 
         let time = self.time;
         let edits = self.edits.unwrap_or_default();

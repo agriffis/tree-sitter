@@ -2,7 +2,7 @@ ifeq ($(OS),Windows_NT)
 $(error Windows is not supported)
 endif
 
-VERSION := 0.24.1
+VERSION := 0.25.0
 DESCRIPTION := An incremental parsing system for programming tools
 HOMEPAGE_URL := https://tree-sitter.github.io/tree-sitter/
 
@@ -27,6 +27,7 @@ OBJ := $(SRC:.c=.o)
 ARFLAGS := rcs
 CFLAGS ?= -O3 -Wall -Wextra -Wshadow -pedantic
 override CFLAGS += -std=c11 -fPIC -fvisibility=hidden
+override CFLAGS += -D_POSIX_C_SOURCE=200112L -D_DEFAULT_SOURCE
 override CFLAGS += -Ilib/src -Ilib/src/wasm -Ilib/include
 
 # ABI versioning
@@ -62,8 +63,8 @@ endif
 
 tree-sitter.pc: lib/tree-sitter.pc.in
 	sed -e 's|@PROJECT_VERSION@|$(VERSION)|' \
-		-e 's|@CMAKE_INSTALL_LIBDIR@|$(LIBDIR)|' \
-		-e 's|@CMAKE_INSTALL_INCLUDEDIR@|$(INCLUDEDIR)|' \
+		-e 's|@CMAKE_INSTALL_LIBDIR@|$(LIBDIR:$(PREFIX)/%=%)|' \
+		-e 's|@CMAKE_INSTALL_INCLUDEDIR@|$(INCLUDEDIR:$(PREFIX)/%=%)|' \
 		-e 's|@PROJECT_DESCRIPTION@|$(DESCRIPTION)|' \
 		-e 's|@PROJECT_HOMEPAGE_URL@|$(HOMEPAGE_URL)|' \
 		-e 's|@CMAKE_INSTALL_PREFIX@|$(PREFIX)|' $< > $@
