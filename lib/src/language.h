@@ -10,8 +10,8 @@ extern "C" {
 
 #define ts_builtin_sym_error_repeat (ts_builtin_sym_error - 1)
 
+#define LANGUAGE_VERSION_WITH_METADATA 15
 #define LANGUAGE_VERSION_WITH_PRIMARY_STATES 14
-#define LANGUAGE_VERSION_USABLE_VIA_WASM 13
 
 typedef struct {
   const TSParseAction *actions;

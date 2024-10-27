@@ -26,7 +26,7 @@ extern "C" {
  * The Tree-sitter library is generally backwards-compatible with languages
  * generated using older CLI versions, but is not forwards-compatible.
  */
-#define TREE_SITTER_LANGUAGE_VERSION 14
+#define TREE_SITTER_LANGUAGE_VERSION 15
 
 /**
  * The earliest ABI version that is supported by the current version of the
@@ -1141,6 +1141,11 @@ uint32_t ts_language_version(const TSLanguage *self);
  * [`ts_node_grammar_symbol`] for valid symbols.
 */
 TSStateId ts_language_next_state(const TSLanguage *self, TSStateId state, TSSymbol symbol);
+
+/**
+ * Get the name of this language. This returns `NULL` in older parsers.
+ */
+const char *ts_language_name(const TSLanguage *self);
 
 /********************************/
 /* Section - Lookahead Iterator */
