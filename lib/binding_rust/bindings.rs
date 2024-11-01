@@ -35,9 +35,13 @@ pub struct TSQueryCursor {
 pub struct TSLookaheadIterator {
     _unused: [u8; 0],
 }
+pub type DecodeFunction = ::core::option::Option<
+    unsafe extern "C" fn(string: *const u8, length: u32, code_point: *mut i32) -> u32,
+>;
 pub const TSInputEncodingUTF8: TSInputEncoding = 0;
 pub const TSInputEncodingUTF16LE: TSInputEncoding = 1;
 pub const TSInputEncodingUTF16BE: TSInputEncoding = 2;
+pub const TSInputEncodingCustom: TSInputEncoding = 3;
 pub type TSInputEncoding = ::core::ffi::c_uint;
 pub const TSSymbolTypeRegular: TSSymbolType = 0;
 pub const TSSymbolTypeAnonymous: TSSymbolType = 1;
@@ -71,6 +75,20 @@ pub struct TSInput {
         ) -> *const ::core::ffi::c_char,
     >,
     pub encoding: TSInputEncoding,
+    pub decode: DecodeFunction,
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct TSParseState {
+    pub payload: *mut ::core::ffi::c_void,
+    pub current_byte_offset: u32,
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct TSParseOptions {
+    pub payload: *mut ::core::ffi::c_void,
+    pub progress_callback:
+        ::core::option::Option<unsafe extern "C" fn(state: *mut TSParseState) -> bool>,
 }
 pub const TSLogTypeParse: TSLogType = 0;
 pub const TSLogTypeLex: TSLogType = 1;
@@ -149,6 +167,19 @@ pub const TSQueryErrorCapture: TSQueryError = 4;
 pub const TSQueryErrorStructure: TSQueryError = 5;
 pub const TSQueryErrorLanguage: TSQueryError = 6;
 pub type TSQueryError = ::core::ffi::c_uint;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct TSQueryCursorState {
+    pub payload: *mut ::core::ffi::c_void,
+    pub current_byte_offset: u32,
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct TSQueryCursorOptions {
+    pub payload: *mut ::core::ffi::c_void,
+    pub progress_callback:
+        ::core::option::Option<unsafe extern "C" fn(state: *mut TSQueryCursorState) -> bool>,
+}
 extern "C" {
     #[doc = " Create a new parser."]
     pub fn ts_parser_new() -> *mut TSParser;
@@ -178,11 +209,20 @@ extern "C" {
     pub fn ts_parser_included_ranges(self_: *const TSParser, count: *mut u32) -> *const TSRange;
 }
 extern "C" {
-    #[doc = " Use the parser to parse some source code and create a syntax tree.\n\n If you are parsing this document for the first time, pass `NULL` for the\n `old_tree` parameter. Otherwise, if you have already parsed an earlier\n version of this document and the document has since been edited, pass the\n previous syntax tree so that the unchanged parts of it can be reused.\n This will save time and memory. For this to work correctly, you must have\n already edited the old syntax tree using the [`ts_tree_edit`] function in a\n way that exactly matches the source code changes.\n\n The [`TSInput`] parameter lets you specify how to read the text. It has the\n following three fields:\n 1. [`read`]: A function to retrieve a chunk of text at a given byte offset\n    and (row, column) position. The function should return a pointer to the\n    text and write its length to the [`bytes_read`] pointer. The parser does\n    not take ownership of this buffer; it just borrows it until it has\n    finished reading it. The function should write a zero value to the\n    [`bytes_read`] pointer to indicate the end of the document.\n 2. [`payload`]: An arbitrary pointer that will be passed to each invocation\n    of the [`read`] function.\n 3. [`encoding`]: An indication of how the text is encoded. Either\n    `TSInputEncodingUTF8` or `TSInputEncodingUTF16`.\n\n This function returns a syntax tree on success, and `NULL` on failure. There\n are three possible reasons for failure:\n 1. The parser does not have a language assigned. Check for this using the\n[`ts_parser_language`] function.\n 2. Parsing was cancelled due to a timeout that was set by an earlier call to\n    the [`ts_parser_set_timeout_micros`] function. You can resume parsing from\n    where the parser left out by calling [`ts_parser_parse`] again with the\n    same arguments. Or you can start parsing from scratch by first calling\n    [`ts_parser_reset`].\n 3. Parsing was cancelled using a cancellation flag that was set by an\n    earlier call to [`ts_parser_set_cancellation_flag`]. You can resume parsing\n    from where the parser left out by calling [`ts_parser_parse`] again with\n    the same arguments.\n\n [`read`]: TSInput::read\n [`payload`]: TSInput::payload\n [`encoding`]: TSInput::encoding\n [`bytes_read`]: TSInput::read"]
+    #[doc = " Use the parser to parse some source code and create a syntax tree.\n\n If you are parsing this document for the first time, pass `NULL` for the\n `old_tree` parameter. Otherwise, if you have already parsed an earlier\n version of this document and the document has since been edited, pass the\n previous syntax tree so that the unchanged parts of it can be reused.\n This will save time and memory. For this to work correctly, you must have\n already edited the old syntax tree using the [`ts_tree_edit`] function in a\n way that exactly matches the source code changes.\n\n The [`TSInput`] parameter lets you specify how to read the text. It has the\n following three fields:\n 1. [`read`]: A function to retrieve a chunk of text at a given byte offset\n    and (row, column) position. The function should return a pointer to the\n    text and write its length to the [`bytes_read`] pointer. The parser does\n    not take ownership of this buffer; it just borrows it until it has\n    finished reading it. The function should write a zero value to the\n    [`bytes_read`] pointer to indicate the end of the document.\n 2. [`payload`]: An arbitrary pointer that will be passed to each invocation\n    of the [`read`] function.\n 3. [`encoding`]: An indication of how the text is encoded. Either\n    `TSInputEncodingUTF8` or `TSInputEncodingUTF16`.\n\n This function returns a syntax tree on success, and `NULL` on failure. There\n are four possible reasons for failure:\n 1. The parser does not have a language assigned. Check for this using the\n[`ts_parser_language`] function.\n 2. Parsing was cancelled due to a timeout that was set by an earlier call to\n    the [`ts_parser_set_timeout_micros`] function. You can resume parsing from\n    where the parser left out by calling [`ts_parser_parse`] again with the\n    same arguments. Or you can start parsing from scratch by first calling\n    [`ts_parser_reset`].\n 3. Parsing was cancelled using a cancellation flag that was set by an\n    earlier call to [`ts_parser_set_cancellation_flag`]. You can resume parsing\n    from where the parser left out by calling [`ts_parser_parse`] again with\n    the same arguments.\n 4. Parsing was cancelled due to the progress callback returning true. This callback\n    is passed in [`ts_parser_parse_with_options`] inside the [`TSParseOptions`] struct.\n\n [`read`]: TSInput::read\n [`payload`]: TSInput::payload\n [`encoding`]: TSInput::encoding\n [`bytes_read`]: TSInput::read"]
     pub fn ts_parser_parse(
         self_: *mut TSParser,
         old_tree: *const TSTree,
         input: TSInput,
+    ) -> *mut TSTree;
+}
+extern "C" {
+    #[doc = " Use the parser to parse some source code and create a syntax tree, with some options.\n\n See [`ts_parser_parse`] for more details.\n\n See [`TSParseOptions`] for more details on the options."]
+    pub fn ts_parser_parse_with_options(
+        self_: *mut TSParser,
+        old_tree: *const TSTree,
+        input: TSInput,
+        parse_options: TSParseOptions,
     ) -> *mut TSTree;
 }
 extern "C" {
@@ -209,19 +249,19 @@ extern "C" {
     pub fn ts_parser_reset(self_: *mut TSParser);
 }
 extern "C" {
-    #[doc = " Set the maximum duration in microseconds that parsing should be allowed to\n take before halting.\n\n If parsing takes longer than this, it will halt early, returning NULL.\n See [`ts_parser_parse`] for more information."]
+    #[doc = " @deprecated use [`ts_parser_parse_with_options`] and pass in a callback instead, this will be removed in 0.26.\n\n Set the maximum duration in microseconds that parsing should be allowed to\n take before halting.\n\n If parsing takes longer than this, it will halt early, returning NULL.\n See [`ts_parser_parse`] for more information."]
     pub fn ts_parser_set_timeout_micros(self_: *mut TSParser, timeout_micros: u64);
 }
 extern "C" {
-    #[doc = " Get the duration in microseconds that parsing is allowed to take."]
+    #[doc = " @deprecated use [`ts_parser_parse_with_options`] and pass in a callback instead, this will be removed in 0.26.\n\n Get the duration in microseconds that parsing is allowed to take."]
     pub fn ts_parser_timeout_micros(self_: *const TSParser) -> u64;
 }
 extern "C" {
-    #[doc = " Set the parser's current cancellation flag pointer.\n\n If a non-null pointer is assigned, then the parser will periodically read\n from this pointer during parsing. If it reads a non-zero value, it will\n halt early, returning NULL. See [`ts_parser_parse`] for more information."]
+    #[doc = " @deprecated use [`ts_parser_parse_with_options`] and pass in a callback instead, this will be removed in 0.26.\n\n Set the parser's current cancellation flag pointer.\n\n If a non-null pointer is assigned, then the parser will periodically read\n from this pointer during parsing. If it reads a non-zero value, it will\n halt early, returning NULL. See [`ts_parser_parse`] for more information."]
     pub fn ts_parser_set_cancellation_flag(self_: *mut TSParser, flag: *const usize);
 }
 extern "C" {
-    #[doc = " Get the parser's current cancellation flag pointer."]
+    #[doc = " @deprecated use [`ts_parser_parse_with_options`] and pass in a callback instead, this will be removed in 0.26.\n\n Get the parser's current cancellation flag pointer."]
     pub fn ts_parser_cancellation_flag(self_: *const TSParser) -> *const usize;
 }
 extern "C" {
@@ -641,6 +681,15 @@ extern "C" {
     pub fn ts_query_cursor_exec(self_: *mut TSQueryCursor, query: *const TSQuery, node: TSNode);
 }
 extern "C" {
+    #[doc = " Start running a gievn query on a given node, with some options."]
+    pub fn ts_query_cursor_exec_with_options(
+        self_: *mut TSQueryCursor,
+        query: *const TSQuery,
+        node: TSNode,
+        query_options: *const TSQueryCursorOptions,
+    );
+}
+extern "C" {
     #[doc = " Manage the maximum number of in-progress matches allowed by this query\n cursor.\n\n Query cursors have an optional maximum capacity for storing lists of\n in-progress captures. If this capacity is exceeded, then the\n earliest-starting match will silently be dropped to make room for further\n matches. This maximum capacity is optional — by default, query cursors allow\n any number of pending matches, dynamically allocating new space for them as\n needed as the query is executed."]
     pub fn ts_query_cursor_did_exceed_match_limit(self_: *const TSQueryCursor) -> bool;
 }
@@ -651,11 +700,11 @@ extern "C" {
     pub fn ts_query_cursor_set_match_limit(self_: *mut TSQueryCursor, limit: u32);
 }
 extern "C" {
-    #[doc = " Set the maximum duration in microseconds that query execution should be allowed to\n take before halting.\n\n If query execution takes longer than this, it will halt early, returning NULL.\n See [`ts_query_cursor_next_match`] or [`ts_query_cursor_next_capture`] for more information."]
+    #[doc = " @deprecated use [`ts_query_cursor_exec_with_options`] and pass in a callback instead, this will be removed in 0.26.\n\n Set the maximum duration in microseconds that query execution should be allowed to\n take before halting.\n\n If query execution takes longer than this, it will halt early, returning NULL.\n See [`ts_query_cursor_next_match`] or [`ts_query_cursor_next_capture`] for more information."]
     pub fn ts_query_cursor_set_timeout_micros(self_: *mut TSQueryCursor, timeout_micros: u64);
 }
 extern "C" {
-    #[doc = " Get the duration in microseconds that query execution is allowed to take.\n\n This is set via [`ts_query_cursor_set_timeout_micros`]."]
+    #[doc = " @deprecated use [`ts_query_cursor_exec_with_options`] and pass in a callback instead, this will be removed in 0.26.\n\n Get the duration in microseconds that query execution is allowed to take.\n\n This is set via [`ts_query_cursor_set_timeout_micros`]."]
     pub fn ts_query_cursor_timeout_micros(self_: *const TSQueryCursor) -> u64;
 }
 extern "C" {
