@@ -1,4 +1,5 @@
 #include <stdbool.h>
+#include "./point.h"
 #include "./subtree.h"
 #include "./tree.h"
 #include "./language.h"
@@ -347,6 +348,9 @@ static inline TSNode ts_node__descendant_for_byte_range(
   uint32_t range_end,
   bool include_anonymous
 ) {
+  if (range_start > range_end) {
+    return ts_node__null();
+  }
   TSNode node = self;
   TSNode last_visible_node = self;
 
@@ -390,6 +394,9 @@ static inline TSNode ts_node__descendant_for_point_range(
   TSPoint range_end,
   bool include_anonymous
 ) {
+  if (point_gt(range_start, range_end)) {
+    return ts_node__null();
+  }
   TSNode node = self;
   TSNode last_visible_node = self;
 
