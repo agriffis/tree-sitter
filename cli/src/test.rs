@@ -358,19 +358,21 @@ fn run_tests(
 
             if attributes.skip {
                 println!(
-                    "{:>3}.  {}",
+                    "{:>3}. ⌀ {}",
                     opts.test_num,
                     paint(opts.color.then_some(AnsiColor::Yellow), &name),
                 );
+                opts.test_num += 1;
                 return Ok(true);
             }
 
             if !attributes.platform {
                 println!(
-                    "{:>3}.  {}",
+                    "{:>3}. ⌀ {}",
                     opts.test_num,
                     paint(opts.color.then_some(AnsiColor::Magenta), &name),
                 );
+                opts.test_num += 1;
                 return Ok(true);
             }
 
@@ -387,7 +389,7 @@ fn run_tests(
                 if attributes.error {
                     if tree.root_node().has_error() {
                         println!(
-                            "{:>3}.  {}",
+                            "{:>3}. ✓ {}",
                             opts.test_num,
                             paint(opts.color.then_some(AnsiColor::Green), &name)
                         );
@@ -418,7 +420,7 @@ fn run_tests(
                             ));
                         }
                         println!(
-                            "{:>3}.  {}",
+                            "{:>3}. ✗ {}",
                             opts.test_num,
                             paint(opts.color.then_some(AnsiColor::Red), &name)
                         );
@@ -529,7 +531,6 @@ fn run_tests(
             let mut advance_counter = opts.test_num;
             let failure_count = failures.len();
             let mut has_printed = false;
-            let mut skipped_tests = 0;
 
             let matches_filter = |name: &str, opts: &TestOptions| {
                 if let Some(include) = &opts.include {
@@ -576,7 +577,6 @@ fn run_tests(
                         ));
 
                         opts.test_num += 1;
-                        skipped_tests += 1;
 
                         continue;
                     }
@@ -599,8 +599,6 @@ fn run_tests(
                     return Ok(false);
                 }
             }
-
-            opts.test_num += skipped_tests;
 
             if let Some(file_path) = file_path {
                 if opts.update && failures.len() - failure_count > 0 {
