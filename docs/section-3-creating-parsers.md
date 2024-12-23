@@ -470,6 +470,7 @@ down to a single token.
 * **Immediate Tokens : `token.immediate(rule)`** - Usually, whitespace (and any other extras, such as comments) is optional before each token. This function means that the token will only match if there is no whitespace.
 * **Aliases : `alias(rule, name)`** - This function causes the given rule to *appear* with an alternative name in the syntax tree. If `name` is a *symbol*, as in `alias($.foo, $.bar)`, then the aliased rule will *appear* as a [named node][named-vs-anonymous-nodes-section] called `bar`. And if `name` is a *string literal*, as in `alias($.foo, 'bar')`, then the aliased rule will appear as an [anonymous node][named-vs-anonymous-nodes-section], as if the rule had been written as the simple string.
 * **Field Names : `field(name, rule)`** - This function assigns a *field name* to the child node(s) matched by the given rule. In the resulting syntax tree, you can then use that field name to access specific children.
+* **Reserved Keywords : `reserved(wordset, rule)`**  - This function will override the global reserved word set with the one passed into the `wordset` parameter. This is useful for contextual keywords, such as `if` in JavaScript, which cannot be used as a variable name in most contexts, but can be used as a property name.
 
 In addition to the `name` and `rules` fields, grammars have a few other optional public fields that influence the behavior of the parser.
 
@@ -477,9 +478,10 @@ In addition to the `name` and `rules` fields, grammars have a few other optional
 * **`inline`** - an array of rule names that should be automatically *removed* from the grammar by replacing all of their usages with a copy of their definition. This is useful for rules that are used in multiple places but for which you *don't* want to create syntax tree nodes at runtime.
 * **`conflicts`** - an array of arrays of rule names. Each inner array represents a set of rules that's involved in an *LR(1) conflict* that is *intended to exist* in the grammar. When these conflicts occur at runtime, Tree-sitter will use the GLR algorithm to explore all of the possible interpretations. If *multiple* parses end up succeeding, Tree-sitter will pick the subtree whose corresponding rule has the highest total *dynamic precedence*.
 * **`externals`** - an array of token names which can be returned by an [*external scanner*](#external-scanners). External scanners allow you to write custom C code which runs during the lexing process in order to handle lexical rules (e.g. Python's indentation tokens) that cannot be described by regular expressions.
-* **`precedences`** - an array of array of strings, where each array of strings defines named precedence levels in descending order. These names can be used in the `prec` functions to define precedence relative only to other names in the array, rather than globally. Can only be used with parse precedence, not lexical precedence.
+* **`precedences`** - an array of arrays of strings, where each array of strings defines named precedence levels in descending order. These names can be used in the `prec` functions to define precedence relative only to other names in the array, rather than globally. Can only be used with parse precedence, not lexical precedence.
 * **`word`** - the name of a token that will match keywords for the purpose of the [keyword extraction](#keyword-extraction) optimization.
-* **`supertypes`** an array of hidden rule names which should be considered to be 'supertypes' in the generated [*node types* file][static-node-types].
+* **`supertypes`** - an array of hidden rule names which should be considered to be 'supertypes' in the generated [*node types* file][static-node-types].
+* **`reserved`** - similar in structure to the main `rules` property, an object of reserved word sets associated with an array of reserved rules. The reserved rule in the array must be a terminal token - meaning it must be a string, regex, or token, or a terminal rule. The *first* reserved word set in the object is the global word set, meaning it applies to every rule in every parse state. However, certain keywords are contextual, depending on the rule. For example, in JavaScript, keywords are typically not allowed as ordinary variables, however, they *can* be used as a property name. In this situation, the `reserved` function would be used, and the word set to pass in would be the name of the word set that is declared in the `reserved` object that coreesponds an empty array, signifying *no* keywords are reserved.
 
 ## Writing the Grammar
 
@@ -557,6 +559,9 @@ Although languages have very different constructs, their constructs can often be
   }
 }
 ```
+
+One important fact to know up front is that the start rule for the grammar is the first property in the `rules` object.
+In the example above, that would correspond to `source_file`, but it can be named anything.
 
 Some of the details of this grammar will be explained in more depth later on, but if you focus on the `TODO` comments, you can see that the overall strategy is *breadth-first*. Notably, this initial skeleton does not need to directly match an exact subset of the context-free grammar in the language specification. It just needs to touch on the major groupings of rules in as simple and obvious a way as possible.
 
@@ -1075,7 +1080,7 @@ If you put terminal keywords in the `externals` array, for example `externals: $
 
 If in the `externals` array use literal keywords then lexing works in two steps, the external scanner will be called first and if it sets a resulting token and returns `true` then the token considered as recognized and Tree-sitter moves to a next token. But the external scanner may return `false` and in this case Tree-sitter fallbacks to the internal lexing mechanism.
 
-In case of some keywords defined in the `externals` array in a rule referencing form like `$.if_keyword` and there is no additional definition of that rule in the grammar rules, e.g., `if_keyword: $ => 'if'` then fallback to the internal lexer isn't possible because Tree-sitter doesn't know the actual keyword and it's fully the external scanner resposibilty to recognize such tokens.
+In case of some keywords defined in the `externals` array in a rule referencing form like `$.if_keyword` and there is no additional definition of that rule in the grammar rules, e.g., `if_keyword: $ => 'if'` then fallback to the internal lexer isn't possible because Tree-sitter doesn't know the actual keyword and it's fully the external scanner responsibilty to recognize such tokens.
 
 External scanners are a common cause of infinite loops.
 Be very careful when emitting zero-width tokens from your external scanner, and if you consume characters in a loop be sure use the `eof` function to check whether you are at the end of the file.
