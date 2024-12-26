@@ -1,4 +1,24 @@
-function initializeCustomSelect() {
+function initializeLocalTheme() {
+  const themeToggle = document.getElementById('theme-toggle');
+  if (!themeToggle) return;
+
+  // Load saved theme or use system preference
+  const savedTheme = localStorage.getItem('theme');
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const initialTheme = savedTheme || (prefersDark ? 'dark' : 'light');
+
+  // Set initial theme
+  document.documentElement.setAttribute('data-theme', initialTheme);
+
+  themeToggle.addEventListener('click', () => {
+    const currentTheme = document.documentElement.getAttribute('data-theme');
+    const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', newTheme);
+    localStorage.setItem('theme', newTheme);
+  });
+}
+
+function initializeCustomSelect({ initialValue = null, addListeners = false }) {
   const button = document.getElementById('language-button');
   const select = document.getElementById('language-select');
   if (!button || !select) return;
@@ -6,33 +26,42 @@ function initializeCustomSelect() {
   const dropdown = button.nextElementSibling;
   const selectedValue = button.querySelector('.selected-value');
 
+  if (initialValue) {
+    select.value = initialValue;
+  }
   selectedValue.textContent = select.options[select.selectedIndex].text;
 
-  button.addEventListener('click', (e) => {
-    e.preventDefault(); // Prevent form submission
-    dropdown.classList.toggle('show');
-  });
-
-  document.addEventListener('click', (e) => {
-    if (!button.contains(e.target)) {
-      dropdown.classList.remove('show');
-    }
-  });
-
-  dropdown.querySelectorAll('.option').forEach(option => {
-    option.addEventListener('click', () => {
-      selectedValue.textContent = option.textContent;
-      select.value = option.dataset.value;
-      dropdown.classList.remove('show');
-
-      const event = new Event('change');
-      select.dispatchEvent(event);
+  if (addListeners) {
+    button.addEventListener('click', (e) => {
+      e.preventDefault(); // Prevent form submission
+      dropdown.classList.toggle('show');
     });
-  });
+
+    document.addEventListener('click', (e) => {
+      if (!button.contains(e.target)) {
+        dropdown.classList.remove('show');
+      }
+    });
+
+    dropdown.querySelectorAll('.option').forEach(option => {
+      option.addEventListener('click', () => {
+        selectedValue.textContent = option.textContent;
+        select.value = option.dataset.value;
+        dropdown.classList.remove('show');
+
+        const event = new Event('change');
+        select.dispatchEvent(event);
+      });
+    });
+  }
 }
 
-window.initializePlayground = async function initializePlayground() {
-  initializeCustomSelect();
+window.initializePlayground = async function initializePlayground(opts) {
+  const { local } = opts;
+  if (local) {
+    initializeLocalTheme();
+  }
+  initializeCustomSelect({ addListeners: true });
 
   let tree;
 
@@ -214,7 +243,6 @@ window.initializePlayground = async function initializePlayground() {
       }
 
       let displayName;
-      let displayClass = 'plain';
       if (cursor.nodeIsMissing) {
         const nodeTypeText = cursor.nodeIsNamed ? cursor.nodeType : `"${cursor.nodeType}"`;
         displayName = `MISSING ${nodeTypeText}`;
@@ -262,10 +290,10 @@ window.initializePlayground = async function initializePlayground() {
                 : 'node-link anonymous';
 
           row = `<div class="tree-row">${"  ".repeat(indentLevel)}${fieldName}` +
-                `<a class='${nodeClass}' href="#" data-id=${id} ` +
-                `data-range="${start.row},${start.column},${end.row},${end.column}">` +
-                `${displayName}</a> <span class="position-info">` +
-                `[${start.row}, ${start.column}] - [${end.row}, ${end.column}]</span>`;
+            `<a class='${nodeClass}' href="#" data-id=${id} ` +
+            `data-range="${start.row},${start.column},${end.row},${end.column}">` +
+            `${displayName}</a> <span class="position-info">` +
+            `[${start.row}, ${start.column}] - [${end.row}, ${end.column}]</span>`;
           finishedRow = true;
         }
 
@@ -542,6 +570,7 @@ window.initializePlayground = async function initializePlayground() {
       queryInput.value = query;
       codeInput.value = sourceCode;
       languageSelect.value = language;
+      initializeCustomSelect({ initialValue: language });
       anonymousNodes.checked = anonNodes === "true";
       queryCheckbox.checked = queryEnabled === "true";
     }
