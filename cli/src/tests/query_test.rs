@@ -5442,3 +5442,139 @@ fn test_wildcard_behavior_before_anchor() {
         ],
     );
 }
+
+#[test]
+fn test_pattern_alternatives_follow_last_child_constraint() {
+    let language = get_language("rust");
+    let mut parser = Parser::new();
+    parser.set_language(&language).unwrap();
+
+    let code = "
+fn f() {
+    if a {} // <- should NOT match
+    if b {}
+}";
+
+    let tree = parser.parse(code, None).unwrap();
+    let mut cursor = QueryCursor::new();
+
+    let query = Query::new(
+        &language,
+        "(block
+        [
+            (type_cast_expression)
+            (expression_statement)
+        ] @last
+        .
+        )",
+    )
+    .unwrap();
+
+    let matches = {
+        let root_node = tree.root_node();
+        let matches = cursor.matches(&query, root_node, code.as_bytes());
+        collect_matches(matches, &query, code)
+            .into_iter()
+            .map(|(i, m)| {
+                (
+                    i,
+                    m.into_iter()
+                        .map(|(k, v)| (k.to_string(), v.to_string()))
+                        .collect::<Vec<_>>(),
+                )
+            })
+            .collect::<Vec<_>>()
+    };
+
+    let flipped_query = Query::new(
+        &language,
+        "(block
+        [
+            (expression_statement)
+            (type_cast_expression)
+        ] @last
+        .
+        )",
+    )
+    .unwrap();
+
+    let flipped_matches = {
+        let root_node = tree.root_node();
+        let matches = cursor.matches(&flipped_query, root_node, code.as_bytes());
+        collect_matches(matches, &flipped_query, code)
+            .into_iter()
+            .map(|(i, m)| {
+                (
+                    i,
+                    m.into_iter()
+                        .map(|(k, v)| (k.to_string(), v.to_string()))
+                        .collect::<Vec<_>>(),
+                )
+            })
+            .collect::<Vec<_>>()
+    };
+
+    assert_eq!(
+        matches,
+        vec![(0, vec![(String::from("last"), String::from("if b {}"))])]
+    );
+    assert_eq!(matches, flipped_matches);
+}
+
+#[test]
+fn test_wildcard_parent_allows_fallible_child_patterns() {
+    let language = get_language("javascript");
+    let mut parser = Parser::new();
+    parser.set_language(&language).unwrap();
+
+    let source_code = r#"
+function foo() {
+    "bar"
+}
+    "#;
+
+    let query = Query::new(
+        &language,
+        "(function_declaration
+          (_
+            (expression_statement)
+          )
+        ) @part",
+    )
+    .unwrap();
+
+    assert_query_matches(
+        &language,
+        &query,
+        source_code,
+        &[(0, vec![("part", "function foo() {\n    \"bar\"\n}")])],
+    );
+}
+
+#[test]
+fn test_unfinished_captures_are_not_definite_with_pending_anchors() {
+    let language = get_language("javascript");
+    let mut parser = Parser::new();
+    parser.set_language(&language).unwrap();
+
+    let source_code = "
+const foo = [
+  1, 2, 3
+]
+";
+
+    let tree = parser.parse(source_code, None).unwrap();
+    let query = Query::new(&language, r#"(array (_) @foo . "]")"#).unwrap();
+    let mut matches_cursor = QueryCursor::new();
+    let mut captures_cursor = QueryCursor::new();
+
+    let captures = captures_cursor.captures(&query, tree.root_node(), source_code.as_bytes());
+    let captures = collect_captures(captures, &query, source_code);
+
+    let matches = matches_cursor.matches(&query, tree.root_node(), source_code.as_bytes());
+    let matches = collect_matches(matches, &query, source_code);
+
+    assert_eq!(captures, vec![("foo", "3")]);
+    assert_eq!(matches.len(), 1);
+    assert_eq!(matches[0].1, captures);
+}

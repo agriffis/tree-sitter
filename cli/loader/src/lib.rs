@@ -937,7 +937,7 @@ impl Loader {
 
                             {}
 
-                            You can read more about this at https://tree-sitter.github.io/tree-sitter/creating-parsers#external-scanners
+                            You can read more about this at https://tree-sitter.github.io/tree-sitter/creating-parsers/4-external-scanners
                         "},
                         missing,
                     )));
@@ -1128,6 +1128,12 @@ impl Loader {
                 }
             }
         }
+    }
+
+    #[must_use]
+    pub fn get_language_configuration_in_current_path(&self) -> Option<&LanguageConfiguration> {
+        self.language_configuration_in_current_path
+            .map(|i| &self.language_configurations[i])
     }
 
     pub fn find_language_configurations_at_path(
@@ -1578,7 +1584,7 @@ impl LanguageConfiguration<'_> {
                 eprintln!(
                     indoc! {"
                         Warning: you should add a `{}` entry pointing to the highlights path in the `tree-sitter` object in the grammar's tree-sitter.json file.
-                        See more here: https://tree-sitter.github.io/tree-sitter/syntax-highlighting#query-paths
+                        See more here: https://tree-sitter.github.io/tree-sitter/3-syntax-highlighting#query-paths
                     "},
                     default_path.replace(".scm", "")
                 );
