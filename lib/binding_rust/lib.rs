@@ -304,6 +304,9 @@ pub struct QueryMatches<'query, 'tree: 'query, T: TextProvider<I>, I: AsRef<[u8]
 }
 
 /// A sequence of [`QueryCapture`]s associated with a given [`QueryCursor`].
+///
+/// During iteration, each element contains a [`QueryMatch`] and index. The index can
+/// be used to access the new capture inside of the [`QueryMatch::captures`]'s [`captures`].
 pub struct QueryCaptures<'query, 'tree: 'query, T: TextProvider<I>, I: AsRef<[u8]>> {
     ptr: *mut ffi::TSQueryCursor,
     query: &'query Query,
@@ -418,6 +421,36 @@ impl Language {
     #[must_use]
     pub fn parse_state_count(&self) -> usize {
         unsafe { ffi::ts_language_state_count(self.0) as usize }
+    }
+
+    /// Get a list of all supertype symbols for the language.
+    #[doc(alias = "ts_language_supertypes")]
+    #[must_use]
+    pub fn supertypes(&self) -> &[u16] {
+        let mut length = 0u32;
+        unsafe {
+            let ptr = ffi::ts_language_supertypes(self.0, core::ptr::addr_of_mut!(length));
+            if length == 0 {
+                &[]
+            } else {
+                slice::from_raw_parts(ptr.cast_mut(), length as usize)
+            }
+        }
+    }
+
+    /// Get a list of all subtype symbol names for a given supertype symbol.
+    #[doc(alias = "ts_language_supertype_map")]
+    #[must_use]
+    pub fn subtypes_for_supertype(&self, supertype: u16) -> &[u16] {
+        unsafe {
+            let mut length = 0u32;
+            let ptr = ffi::ts_language_subtypes(self.0, supertype, core::ptr::addr_of_mut!(length));
+            if length == 0 {
+                &[]
+            } else {
+                slice::from_raw_parts(ptr.cast_mut(), length as usize)
+            }
+        }
     }
 
     /// Get the name of the node kind for the given numerical id.

@@ -1,7 +1,7 @@
 use std::{
     fmt, fs,
     io::{self, StdoutLock, Write},
-    path::Path,
+    path::{Path, PathBuf},
     sync::atomic::{AtomicUsize, Ordering},
     time::{Duration, Instant},
 };
@@ -17,7 +17,7 @@ use tree_sitter::{
 use super::util;
 use crate::{fuzz::edits::Edit, test::paint};
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Serialize)]
 pub struct Stats {
     pub successful_parses: usize,
     pub total_parses: usize,
@@ -177,9 +177,57 @@ pub enum ParseOutput {
     Dot,
 }
 
+/// A position in a multi-line text document, in terms of rows and columns.
+///
+/// Rows and columns are zero-based.
+///
+/// This serves as a serializable wrapper for `Point`
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize)]
+pub struct ParsePoint {
+    pub row: usize,
+    pub column: usize,
+}
+
+impl From<Point> for ParsePoint {
+    fn from(value: Point) -> Self {
+        Self {
+            row: value.row,
+            column: value.column,
+        }
+    }
+}
+
+#[derive(Serialize, Default, Debug, Clone)]
+pub struct ParseSummary {
+    pub file: PathBuf,
+    pub successful: bool,
+    pub start: Option<ParsePoint>,
+    pub end: Option<ParsePoint>,
+    pub duration: Option<Duration>,
+    pub bytes: Option<usize>,
+}
+
+impl ParseSummary {
+    #[must_use]
+    pub fn new(path: &Path) -> Self {
+        Self {
+            file: path.to_path_buf(),
+            successful: false,
+            ..Default::default()
+        }
+    }
+}
+
+#[derive(Serialize, Debug, Default)]
+pub struct ParseStats {
+    pub parse_summaries: Vec<ParseSummary>,
+    pub cumulative_stats: Stats,
+}
+
 pub struct ParseFileOptions<'a> {
     pub edits: &'a [&'a str],
     pub output: ParseOutput,
+    pub stats: &'a mut ParseStats,
     pub print_time: bool,
     pub timeout: u64,
     pub debug: bool,
@@ -204,8 +252,8 @@ pub fn parse_file_at_path(
     path: &Path,
     name: &str,
     max_path_length: usize,
-    opts: &ParseFileOptions,
-) -> Result<ParseResult> {
+    opts: &mut ParseFileOptions,
+) -> Result<()> {
     let mut _log_session = None;
     parser.set_language(language)?;
     let mut source_code = fs::read(path).with_context(|| format!("Error reading {name:?}"))?;
@@ -596,11 +644,16 @@ pub fn parse_file_at_path(
             writeln!(&mut stdout)?;
         }
 
-        return Ok(ParseResult {
-            successful: first_error.is_none(),
-            bytes: source_code.len(),
+        opts.stats.parse_summaries.push(ParseSummary {
+            file: path.to_path_buf(),
+            successful: true,
+            start: Some(tree.root_node().start_position().into()),
+            end: Some(tree.root_node().end_position().into()),
             duration: Some(parse_duration),
+            bytes: Some(source_code.len()),
         });
+
+        return Ok(());
     }
     parser.stop_printing_dot_graphs();
 
@@ -615,11 +668,16 @@ pub fn parse_file_at_path(
         )?;
     }
 
-    Ok(ParseResult {
+    opts.stats.parse_summaries.push(ParseSummary {
+        file: path.to_path_buf(),
         successful: false,
-        bytes: source_code.len(),
+        start: None,
+        end: None,
         duration: None,
-    })
+        bytes: Some(source_code.len()),
+    });
+
+    Ok(())
 }
 
 const fn escape_invisible(c: char) -> Option<&'static str> {
