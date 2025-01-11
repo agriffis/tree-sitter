@@ -291,6 +291,69 @@ This is where `prec.left` and `prec.right` come into use. We want to select the 
 }
 ```
 
+## Using Conflicts
+
+Sometimes, conflicts are actually desirable. In our JavaScript grammar, expressions and patterns can create intentional ambiguity.
+A construct like `[x, y]` could be legitimately parsed as both an array literal (like in `let a = [x, y]`) or as a destructuring
+pattern (like in `let [x, y] = arr`).
+
+```js
+module.exports = grammar({
+  name: "javascript",
+
+  rules: {
+    expression: $ => choice(
+      $.identifier,
+      $.array,
+      $.pattern,
+    ),
+
+    array: $ => seq(
+      "[",
+      optional(seq(
+        $.expression, repeat(seq(",", $.expression))
+      )),
+      "]"
+    ),
+
+    array_pattern: $ => seq(
+      "[",
+      optional(seq(
+        $.pattern, repeat(seq(",", $.pattern))
+      )),
+      "]"
+    ),
+
+    pattern: $ => choice(
+      $.identifier,
+      $.array_pattern,
+    ),
+  },
+})
+```
+
+In such cases, we want the parser to explore both possibilities by explicitly declaring this ambiguity:
+
+```js
+{
+  name: "javascript",
+
+  conflicts: $ => [
+    [$.array, $.array_pattern],
+  ],
+
+  rules: {
+    // ...
+  },
+}
+```
+
+```admonish note
+The example is a bit contrived for the purpose of illustrating the usage of conflicts. The actual JavaScript grammar isn't
+structured like that, but this conflict is actually present in the
+[Tree-sitter JavaScript grammar](https://github.com/tree-sitter/tree-sitter-javascript/blob/108b2d4d17a04356a340aea809e4dd5b801eb40d/grammar.js#L100).
+```
+
 ## Hiding Rules
 
 You may have noticed in the above examples that some grammar rule name like `_expression` and `_type` began with an underscore.
@@ -355,8 +418,8 @@ which rule is chosen to interpret a given sequence of tokens. _Lexical precedenc
 at a given position of text, and it is a lower-level operation that is done first. The above list fully captures Tree-sitter's
 lexical precedence rules, and you will probably refer back to this section of the documentation more often than any other.
 Most of the time when you really get stuck, you're dealing with a lexical precedence problem. Pay particular attention to
-the difference in meaning between using `prec` inside the `token` function versus outside it. The _lexical precedence_ syntax
-is `token(prec(N, ...))`.
+the difference in meaning between using `prec` inside the `token` function versus outside it. The _lexical precedence_ syntax,
+as mentioned in the previous page, is `token(prec(N, ...))`.
 
 ## Keywords
 
