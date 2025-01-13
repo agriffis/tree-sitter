@@ -19,10 +19,10 @@ use tree_sitter_cli::{
         LOG_GRAPH_ENABLED, START_SEED,
     },
     highlight::{self, HighlightOptions},
-    init::{generate_grammar_files, get_root_path, migrate_package_json, JsonConfigOpts},
+    init::{generate_grammar_files, get_root_path, JsonConfigOpts},
     input::{get_input, get_tmp_source_file, CliInput},
     logger,
-    parse::{self, ParseFileOptions, ParseOutput, ParseTheme},
+    parse::{self, ParseDebugType, ParseFileOptions, ParseOutput, ParseTheme},
     playground, query,
     tags::{self, TagsOptions},
     test::{self, TestOptions, TestStats},
@@ -171,8 +171,9 @@ struct Parse {
     #[arg(long)]
     pub scope: Option<String>,
     /// Show parsing debug log
-    #[arg(long, short = 'd')]
-    pub debug: bool,
+    #[arg(long, short = 'd')] // TODO: Rework once clap adds `default_missing_value_t`
+    #[allow(clippy::option_option)]
+    pub debug: Option<Option<ParseDebugType>>,
     /// Compile a parser in debug mode
     #[arg(long, short = '0')]
     pub debug_build: bool,
@@ -497,9 +498,8 @@ impl InitConfig {
 }
 
 impl Init {
-    fn run(self, current_dir: &Path, migrated: bool) -> Result<()> {
-        let configure_json = !current_dir.join("tree-sitter.json").exists()
-            && (!current_dir.join("package.json").exists() || !migrated);
+    fn run(self, current_dir: &Path) -> Result<()> {
+        let configure_json = !current_dir.join("tree-sitter.json").exists();
 
         let (language_name, json_config_opts) = if configure_json {
             let mut opts = JsonConfigOpts::default();
@@ -749,7 +749,7 @@ impl Generate {
                 std::process::exit(1);
             } else {
                 // Removes extra context associated with the error
-                Err(anyhow!(err.to_string()))?;
+                Err(anyhow!(err.to_string())).with_context(|| "Error when generating parser")?;
             }
         }
         if self.build {
@@ -878,6 +878,11 @@ impl Parse {
 
         let should_track_stats = self.stat;
         let mut stats = parse::ParseStats::default();
+        let debug: ParseDebugType = match self.debug {
+            None => ParseDebugType::Quiet,
+            Some(None) => ParseDebugType::Normal,
+            Some(Some(specifier)) => specifier,
+        };
 
         let mut options = ParseFileOptions {
             edits: &edits
@@ -888,7 +893,7 @@ impl Parse {
             print_time: time,
             timeout,
             stats: &mut stats,
-            debug: self.debug,
+            debug,
             debug_graph: self.debug_graph,
             cancellation_flag: Some(&cancellation_flag),
             encoding,
@@ -1676,17 +1681,9 @@ fn run() -> Result<()> {
     let current_dir = env::current_dir().unwrap();
     let loader = loader::Loader::new()?;
 
-    let migrated = if !current_dir.join("tree-sitter.json").exists()
-        && current_dir.join("package.json").exists()
-    {
-        migrate_package_json(&current_dir).unwrap_or(false)
-    } else {
-        false
-    };
-
     match command {
         Commands::InitConfig(_) => InitConfig::run()?,
-        Commands::Init(init_options) => init_options.run(&current_dir, migrated)?,
+        Commands::Init(init_options) => init_options.run(&current_dir)?,
         Commands::Generate(generate_options) => generate_options.run(loader, &current_dir)?,
         Commands::Build(build_options) => build_options.run(loader, &current_dir)?,
         Commands::Parse(parse_options) => parse_options.run(loader, &current_dir)?,

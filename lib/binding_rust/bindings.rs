@@ -309,7 +309,7 @@ extern "C" {
     pub fn ts_tree_edit(self_: *mut TSTree, edit: *const TSInputEdit);
 }
 extern "C" {
-    #[doc = " Compare an old edited syntax tree to a new syntax tree representing the same\n document, returning an array of ranges whose syntactic structure has changed.\n\n For this to work correctly, the old syntax tree must have been edited such\n that its ranges match up to the new tree. Generally, you'll want to call\n this function right after calling one of the [`ts_parser_parse`] functions.\n You need to pass the old tree that was passed to parse, as well as the new\n tree that was returned from that function.\n\n The returned array is allocated using `malloc` and the caller is responsible\n for freeing it using `free`. The length of the array will be written to the\n given `length` pointer."]
+    #[doc = " Compare an old edited syntax tree to a new syntax tree representing the same\n document, returning an array of ranges whose syntactic structure has changed.\n\n For this to work correctly, the old syntax tree must have been edited such\n that its ranges match up to the new tree. Generally, you'll want to call\n this function right after calling one of the [`ts_parser_parse`] functions.\n You need to pass the old tree that was passed to parse, as well as the new\n tree that was returned from that function.\n\n The returned ranges indicate areas where the hierarchical structure of syntax\n nodes (from root to leaf) has changed between the old and new trees. Characters\n outside these ranges have identical ancestor nodes in both trees.\n\n Note that the returned ranges may be slightly larger than the exact changed areas,\n but Tree-sitter attempts to make them as small as possible.\n\n The returned array is allocated using `malloc` and the caller is responsible\n for freeing it using `free`. The length of the array will be written to the\n given `length` pointer."]
     pub fn ts_tree_get_changed_ranges(
         old_tree: *const TSTree,
         new_tree: *const TSTree,
@@ -397,15 +397,11 @@ extern "C" {
     pub fn ts_node_next_parse_state(self_: TSNode) -> TSStateId;
 }
 extern "C" {
-    #[doc = " Get the node's immediate parent.\n Prefer [`ts_node_child_containing_descendant`] for\n iterating over the node's ancestors."]
+    #[doc = " Get the node's immediate parent.\n Prefer [`ts_node_child_with_descendant`] for\n iterating over the node's ancestors."]
     pub fn ts_node_parent(self_: TSNode) -> TSNode;
 }
 extern "C" {
-    #[doc = " @deprecated use [`ts_node_contains_descendant`] instead, this will be removed in 0.25\n\n Get the node's child containing `descendant`. This will not return\n the descendant if it is a direct child of `self`, for that use\n `ts_node_contains_descendant`."]
-    pub fn ts_node_child_containing_descendant(self_: TSNode, descendant: TSNode) -> TSNode;
-}
-extern "C" {
-    #[doc = " Get the node that contains `descendant`.\n\n Note that this can return `descendant` itself, unlike the deprecated function\n [`ts_node_child_containing_descendant`]."]
+    #[doc = " Get the node that contains `descendant`.\n\n Note that this can return `descendant` itself."]
     pub fn ts_node_child_with_descendant(self_: TSNode, descendant: TSNode) -> TSNode;
 }
 extern "C" {
@@ -708,7 +704,7 @@ extern "C" {
     pub fn ts_query_cursor_timeout_micros(self_: *const TSQueryCursor) -> u64;
 }
 extern "C" {
-    #[doc = " Set the range of bytes in which the query will be executed.\n\n This will return `false` if the start byte is greater than the end byte, otherwise\n it will return `true`."]
+    #[doc = " Set the range of bytes in which the query will be executed.\n\n The query cursor will return matches that intersect with the given point range.\n This means that a match may be returned even if some of its captures fall\n outside the specified range, as long as at least part of the match\n overlaps with the range.\n\n For example, if a query pattern matches a node that spans a larger area\n than the specified range, but part of that node intersects with the range,\n the entire match will be returned.\n\n This will return `false` if the start byte is greater than the end byte, otherwise\n it will return `true`."]
     pub fn ts_query_cursor_set_byte_range(
         self_: *mut TSQueryCursor,
         start_byte: u32,
@@ -716,7 +712,7 @@ extern "C" {
     ) -> bool;
 }
 extern "C" {
-    #[doc = " Set the range of (row, column) positions in which the query will be executed.\n\n This will return `false` if the start point is greater than the end point, otherwise\n it will return `true`."]
+    #[doc = " Set the range of (row, column) positions in which the query will be executed.\n\n The query cursor will return matches that intersect with the given point range.\n This means that a match may be returned even if some of its captures fall\n outside the specified range, as long as at least part of the match\n overlaps with the range.\n\n For example, if a query pattern matches a node that spans a larger area\n than the specified range, but part of that node intersects with the range,\n the entire match will be returned.\n\n This will return `false` if the start point is greater than the end point, otherwise\n it will return `true`."]
     pub fn ts_query_cursor_set_point_range(
         self_: *mut TSQueryCursor,
         start_point: TSPoint,

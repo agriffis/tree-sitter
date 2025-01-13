@@ -121,7 +121,7 @@ pub struct ParseState(NonNull<ffi::TSParseState>);
 
 impl ParseState {
     #[must_use]
-    pub fn current_byte_offset(&self) -> usize {
+    pub const fn current_byte_offset(&self) -> usize {
         unsafe { self.0.as_ref() }.current_byte_offset as usize
     }
 }
@@ -132,7 +132,7 @@ pub struct QueryCursorState(NonNull<ffi::TSQueryCursorState>);
 
 impl QueryCursorState {
     #[must_use]
-    pub fn current_byte_offset(&self) -> usize {
+    pub const fn current_byte_offset(&self) -> usize {
         unsafe { self.0.as_ref() }.current_byte_offset as usize
     }
 }
@@ -1371,7 +1371,7 @@ impl Parser {
         if let Some(flag) = flag {
             ffi::ts_parser_set_cancellation_flag(
                 self.0.as_ptr(),
-                (flag as *const AtomicUsize).cast::<usize>(),
+                std::ptr::from_ref::<AtomicUsize>(flag).cast::<usize>(),
             );
         } else {
             ffi::ts_parser_set_cancellation_flag(self.0.as_ptr(), ptr::null());
@@ -1886,7 +1886,7 @@ impl<'tree> Node<'tree> {
     }
 
     /// Get this node's immediate parent.
-    /// Prefer [`child_containing_descendant`](Node::child_containing_descendant)
+    /// Prefer [`child_with_descendant`](Node::child_with_descendant)
     /// for iterating over this node's ancestors.
     #[doc(alias = "ts_node_parent")]
     #[must_use]
@@ -1894,20 +1894,9 @@ impl<'tree> Node<'tree> {
         Self::new(unsafe { ffi::ts_node_parent(self.0) })
     }
 
-    /// Get this node's child containing `descendant`. This will not return
-    /// the descendant if it is a direct child of `self`, for that use
-    /// [`Node::child_with_descendant`].
-    #[doc(alias = "ts_node_child_containing_descendant")]
-    #[must_use]
-    #[deprecated(since = "0.24.0", note = "Prefer child_with_descendant instead")]
-    pub fn child_containing_descendant(&self, descendant: Self) -> Option<Self> {
-        Self::new(unsafe { ffi::ts_node_child_containing_descendant(self.0, descendant.0) })
-    }
-
     /// Get the node that contains `descendant`.
     ///
-    /// Note that this can return `descendant` itself, unlike the deprecated function
-    /// [`Node::child_containing_descendant`].
+    /// Note that this can return `descendant` itself.
     #[doc(alias = "ts_node_child_with_descendant")]
     #[must_use]
     pub fn child_with_descendant(&self, descendant: Self) -> Option<Self> {
