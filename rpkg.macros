@@ -14,7 +14,7 @@ function git_version {
   # then the rest from master. This results in an inflated number of commits,
   # but it remains in sequence, so it doesn't hurt.
   declare describe tag commits hash ignore
-  tag=$(git tag | sort -rV | grep -rm1 '^v[0-9.]+$')
+  tag=$(git tag | sort -rV | grep -Em1 '^v[0-9.]+$')
   describe=$(git describe --first-parent --tags --long origin/master)
   read ignore commits hash <<<"${describe//-/ }"
   [[ $tag == v* && $commits =~ ^[0-9]+$ && -n $hash ]] || abort "failed git describe"
