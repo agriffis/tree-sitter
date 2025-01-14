@@ -12,9 +12,8 @@ function git_version {
 
   declare describe tag commits hash ignore
 
-  # tree-sitter uses a release branch, collect the version from it
-  describe=$(git describe --first-parent --tags --long origin/release-0.24)
-  read tag ignore <<<"${describe//-/ }"
+  # tree-sitter uses a release branch, collect the version from tags instead
+  tag=$(git tag | sort -rV | grep -rm1 '^v[0-9.]+$')
   [[ $tag == v* ]] || abort "failed git describe"
 
   # collect the rest from master
