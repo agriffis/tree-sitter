@@ -10,17 +10,14 @@ function cached {
 function git_version {
   cached git_version && return
 
+  # tree-sitter uses a release branch, collect the version from tags instead,
+  # then the rest from master. This results in an inflated number of commits,
+  # but it remains in sequence, so it doesn't hurt.
   declare describe tag commits hash ignore
-
-  # tree-sitter uses a release branch, collect the version from tags instead
   tag=$(git tag | sort -rV | grep -rm1 '^v[0-9.]+$')
-  [[ $tag == v* ]] || abort "failed git describe"
-
-  # collect the rest from master
-  declare describe tag commits hash
   describe=$(git describe --first-parent --tags --long origin/master)
   read ignore commits hash <<<"${describe//-/ }"
-  [[ $commits =~ ^[0-9]+$ && -n $hash ]] || abort "failed git describe"
+  [[ $tag == v* && $commits =~ ^[0-9]+$ && -n $hash ]] || abort "failed git describe"
 
   # caret indicates post-release snapshot
   output "${tag#v}^$commits.$hash"
