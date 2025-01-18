@@ -17,6 +17,7 @@ function git_version {
   tag=$(git tag | sort -rV | grep -Em1 '^v[0-9.]+$')
   describe=$(git describe --first-parent --tags --long origin/master)
   read ignore commits hash <<<"${describe//-/ }"
+  hash=${hash#g} # git prepends g to indicate git
   [[ $tag == v* && $commits =~ ^[0-9]+$ && -n $hash ]] || abort "failed git describe"
 
   # caret indicates post-release snapshot
