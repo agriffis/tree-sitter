@@ -13,7 +13,7 @@ use notify::{
 };
 use notify_debouncer_full::new_debouncer;
 
-use crate::{bail_on_err, build_wasm::run_wasm, watch_wasm, BuildWasm, CheckWasmExports};
+use crate::{bail_on_err, watch_wasm, CheckWasmExports};
 
 const EXCLUDES: [&str; 27] = [
     // Unneeded because the JS side has its own way of implementing it
@@ -60,15 +60,7 @@ pub fn run(args: &CheckWasmExports) -> Result<()> {
 }
 
 fn check_wasm_exports() -> Result<()> {
-    // Build the wasm module with debug symbols for wasm-objdump
-    run_wasm(&BuildWasm {
-        debug: true,
-        verbose: false,
-        docker: false,
-        watch: false,
-    })?;
-
-    let mut wasm_exports = std::fs::read_to_string("lib/binding_web/exports.txt")?
+    let mut wasm_exports = std::fs::read_to_string("lib/binding_web/lib/exports.txt")?
         .lines()
         .map(|s| s.replace("_wasm", "").replace("byte", "index"))
         // remove leading and trailing quotes, trailing comma
@@ -79,7 +71,7 @@ fn check_wasm_exports() -> Result<()> {
     let wasm_objdump = Command::new("wasm-objdump")
         .args([
             "--details",
-            "lib/binding_web/tree-sitter.wasm",
+            "lib/binding_web/debug/tree-sitter.wasm",
             "--section",
             "Name",
         ])
@@ -128,7 +120,7 @@ fn check_wasm_exports() -> Result<()> {
     let mut missing = exports
         .iter()
         .filter(|&symbol| !wasm_exports.contains(symbol))
-        .map(|symbol| symbol.as_str())
+        .map(String::as_str)
         .collect::<Vec<_>>();
     missing.sort_unstable();
 

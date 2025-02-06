@@ -11,6 +11,7 @@ repository.workspace = true
 license.workspace = true
 keywords.workspace = true
 categories.workspace = true
+include = ["build.rs", "README.md", "benches/*", "src/**"]
 
 [lints]
 workspace = true
@@ -28,6 +29,7 @@ harness = false
 wasm = ["tree-sitter/wasm", "tree-sitter-loader/wasm"]
 
 [dependencies]
+ansi_colours.workspace = true
 anstyle.workspace = true
 anyhow.workspace = true
 bstr.workspace = true
@@ -43,7 +45,6 @@ heck.workspace = true
 html-escape.workspace = true
 indexmap.workspace = true
 indoc.workspace = true
-lazy_static.workspace = true
 log.workspace = true
 memchr.workspace = true
 rand.workspace = true

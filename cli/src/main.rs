@@ -97,6 +97,7 @@ struct Generate {
     #[arg(
         long = "abi",
         value_name = "VERSION",
+        env = "TREE_SITTER_ABI_VERSION",
         help = format!(concat!(
                     "Select the language ABI version to generate (default {}).\n",
                     "Use --abi=latest to generate the newest supported version ({}).",
@@ -534,6 +535,13 @@ impl Init {
                     .interact_text()
             };
 
+            let title = |name: &str| {
+                Input::<String>::with_theme(&ColorfulTheme::default())
+                    .with_prompt("Title (human-readable name)")
+                    .default(name.to_upper_camel_case())
+                    .interact_text()
+            };
+
             let description = |name: &str| {
                 Input::<String>::with_theme(&ColorfulTheme::default())
                     .with_prompt("Description")
@@ -560,6 +568,24 @@ impl Init {
                     .interact_text()
             };
 
+            let funding = || {
+                Input::<String>::with_theme(&ColorfulTheme::default())
+                    .with_prompt("Funding URL")
+                    .allow_empty(true)
+                    .validate_with(|input: &String| {
+                        if input.trim().is_empty()
+                            || Url::parse(input)
+                                .is_ok_and(|u| u.scheme() == "http" || u.scheme() == "https")
+                        {
+                            Ok(())
+                        } else {
+                            Err("The URL must start with 'http://' or 'https://'")
+                        }
+                    })
+                    .interact_text()
+                    .map(|e| (!e.trim().is_empty()).then(|| Url::parse(&e).unwrap()))
+            };
+
             let scope = |name: &str| {
                 Input::<String>::with_theme(&ColorfulTheme::default())
                     .with_prompt("TextMate scope")
@@ -577,7 +603,7 @@ impl Init {
             let file_types = |name: &str| {
                 Input::<String>::with_theme(&ColorfulTheme::default())
                     .with_prompt("File types (space-separated)")
-                    .default(format!(".{name}"))
+                    .default(name.to_string())
                     .interact_text()
                     .map(|ft| {
                         let mut set = HashSet::new();
@@ -638,8 +664,10 @@ impl Init {
             let choices = [
                 "name",
                 "camelcase",
+                "title",
                 "description",
                 "repository",
+                "funding",
                 "scope",
                 "file_types",
                 "version",
@@ -655,8 +683,10 @@ impl Init {
                     match $choice {
                         "name" => opts.name = name()?,
                         "camelcase" => opts.camelcase = camelcase_name(&opts.name)?,
+                        "title" => opts.title = title(&opts.name)?,
                         "description" => opts.description = description(&opts.name)?,
                         "repository" => opts.repository = Some(repository(&opts.name)?),
+                        "funding" => opts.funding = funding()?,
                         "scope" => opts.scope = scope(&opts.name)?,
                         "file_types" => opts.file_types = file_types(&opts.name)?,
                         "version" => opts.version = initial_version()?,
@@ -1311,7 +1341,7 @@ impl Highlight {
             if let Some((lang, lang_config)) = loader.language_configuration_for_scope(scope)? {
                 language = Some(lang);
                 language_configuration = Some(lang_config);
-            };
+            }
             if language.is_none() {
                 return Err(anyhow!("Unknown scope '{scope}'"));
             }
@@ -1465,7 +1495,7 @@ impl Tags {
             if let Some((lang, lang_config)) = loader.language_configuration_for_scope(scope)? {
                 language = Some(lang);
                 language_configuration = Some(lang_config);
-            };
+            }
             if language.is_none() {
                 return Err(anyhow!("Unknown scope '{scope}'"));
             }

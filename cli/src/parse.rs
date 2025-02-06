@@ -279,7 +279,7 @@ pub fn parse_file_at_path(
             if opts.debug == ParseDebugType::Normal {
                 if log_type == LogType::Lex {
                     write!(&mut io::stderr(), "  ").unwrap();
-                };
+                }
                 writeln!(&mut io::stderr(), "{message}").unwrap();
             } else {
                 let colors = &[
@@ -501,6 +501,7 @@ pub fn parse_file_at_path(
                 .unwrap_or(1);
             let mut indent_level = 1;
             let mut did_visit_children = false;
+            let mut in_error = false;
             loop {
                 if did_visit_children {
                     if cursor.goto_next_sibling() {
@@ -508,6 +509,9 @@ pub fn parse_file_at_path(
                     } else if cursor.goto_parent() {
                         did_visit_children = true;
                         indent_level -= 1;
+                        if !cursor.node().has_error() {
+                            in_error = false;
+                        }
                     } else {
                         break;
                     }
@@ -519,10 +523,14 @@ pub fn parse_file_at_path(
                         &mut stdout,
                         total_width,
                         indent_level,
+                        in_error,
                     )?;
                     if cursor.goto_first_child() {
                         did_visit_children = false;
                         indent_level += 1;
+                        if cursor.node().has_error() {
+                            in_error = true;
+                        }
                     } else {
                         did_visit_children = true;
                     }
@@ -626,14 +634,39 @@ pub fn parse_file_at_path(
         }
 
         let mut first_error = None;
-        loop {
+        let mut earliest_node_with_error = None;
+        'outer: loop {
             let node = cursor.node();
             if node.has_error() {
+                if earliest_node_with_error.is_none() {
+                    earliest_node_with_error = Some(node);
+                }
                 if node.is_error() || node.is_missing() {
                     first_error = Some(node);
                     break;
                 }
+
+                // If there's no more children, even though some outer node has an error,
+                // then that means that the first error is hidden, but the later error could be
+                // visible. So, we walk back up to the child of the first node with an error,
+                // and then check its siblings for errors.
                 if !cursor.goto_first_child() {
+                    let earliest = earliest_node_with_error.unwrap();
+                    while cursor.goto_parent() {
+                        if cursor.node().parent().is_some_and(|p| p == earliest) {
+                            while cursor.goto_next_sibling() {
+                                let sibling = cursor.node();
+                                if sibling.is_error() || sibling.is_missing() {
+                                    first_error = Some(sibling);
+                                    break 'outer;
+                                }
+                                if sibling.has_error() && cursor.goto_first_child() {
+                                    continue 'outer;
+                                }
+                            }
+                            break;
+                        }
+                    }
                     break;
                 }
             } else if !cursor.goto_next_sibling() {
@@ -686,7 +719,7 @@ pub fn parse_file_at_path(
 
         opts.stats.parse_summaries.push(ParseSummary {
             file: path.to_path_buf(),
-            successful: true,
+            successful: first_error.is_none(),
             start: Some(tree.root_node().start_position().into()),
             end: Some(tree.root_node().end_position().into()),
             duration: Some(parse_duration),
@@ -771,6 +804,7 @@ fn write_node_text(
             paint(quote_color, &String::from(quote)),
         )?;
     } else {
+        let multiline = source.contains('\n');
         for (i, line) in source.split_inclusive('\n').enumerate() {
             if line.is_empty() {
                 break;
@@ -790,9 +824,18 @@ fn write_node_text(
             if !opts.no_ranges {
                 write!(
                     stdout,
-                    "\n{}{}{}{}{}",
-                    render_node_range(opts, cursor, is_named, true, total_width, node_range),
-                    "  ".repeat(indent_level + 1),
+                    "{}{}{}{}{}{}",
+                    if multiline { "\n" } else { "" },
+                    if multiline {
+                        render_node_range(opts, cursor, is_named, true, total_width, node_range)
+                    } else {
+                        String::new()
+                    },
+                    if multiline {
+                        "  ".repeat(indent_level + 1)
+                    } else {
+                        String::new()
+                    },
                     paint(quote_color, &String::from(quote)),
                     &paint(color, &render_node_text(&formatted_line)),
                     paint(quote_color, &String::from(quote)),
@@ -865,6 +908,7 @@ fn cst_render_node(
     stdout: &mut StdoutLock<'static>,
     total_width: usize,
     indent_level: usize,
+    in_error: bool,
 ) -> Result<()> {
     let node = cursor.node();
     let is_named = node.is_named();
@@ -875,7 +919,16 @@ fn cst_render_node(
             render_node_range(opts, cursor, is_named, false, total_width, node.range())
         )?;
     }
-    write!(stdout, "{}", "  ".repeat(indent_level))?;
+    write!(
+        stdout,
+        "{}{}",
+        "  ".repeat(indent_level),
+        if in_error && !node.has_error() {
+            " "
+        } else {
+            ""
+        }
+    )?;
     if is_named {
         if let Some(field_name) = cursor.field_name() {
             write!(
@@ -885,10 +938,13 @@ fn cst_render_node(
             )?;
         }
 
-        let kind_color = if node.has_error() {
+        if node.has_error() || node.is_error() {
             write!(stdout, "{}", paint(opts.parse_theme.error, "•"))?;
+        }
+
+        let kind_color = if node.is_error() {
             opts.parse_theme.error
-        } else if node.is_extra() || node.parent().is_some_and(|p| p.is_extra()) {
+        } else if node.is_extra() || node.parent().is_some_and(|p| p.is_extra() && !p.is_error()) {
             opts.parse_theme.extra
         } else {
             opts.parse_theme.node_kind
@@ -1013,7 +1069,7 @@ pub fn offset_for_position(input: &[u8], position: Point) -> Result<usize> {
     if let Some(pos) = iter.next() {
         if (pos - offset < position.column) || (input[offset] == b'\n' && position.column > 0) {
             return Err(anyhow!("Failed to address a column: {}", position.column));
-        };
+        }
     } else if input.len() - offset < position.column {
         return Err(anyhow!("Failed to address a column over the end"));
     }

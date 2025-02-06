@@ -1,3 +1,12 @@
+/*
+ * On NetBSD, defining standard requirements like this removes symbols
+ * from the namespace; however, we need non-standard symbols for
+ * endian.h.
+ */
+#if defined(__NetBSD__) && defined(_POSIX_C_SOURCE)
+#undef _POSIX_C_SOURCE
+#endif
+
 #include "tree_sitter/api.h"
 #include "./alloc.h"
 #include "./array.h"
@@ -2433,7 +2442,7 @@ static TSQueryError ts_query__parse_pattern(
 
         // Get all the possible subtypes for the given supertype,
         // and check if the given subtype is valid.
-        if (self->language->version >= LANGUAGE_VERSION_WITH_RESERVED_WORDS) {
+        if (self->language->abi_version >= LANGUAGE_VERSION_WITH_RESERVED_WORDS) {
           uint32_t subtype_length;
           const TSSymbol *subtypes = ts_language_subtypes(
             self->language,
@@ -2774,8 +2783,8 @@ TSQuery *ts_query_new(
 ) {
   if (
     !language ||
-    language->version > TREE_SITTER_LANGUAGE_VERSION ||
-    language->version < TREE_SITTER_MIN_COMPATIBLE_LANGUAGE_VERSION
+    language->abi_version > TREE_SITTER_LANGUAGE_VERSION ||
+    language->abi_version < TREE_SITTER_MIN_COMPATIBLE_LANGUAGE_VERSION
   ) {
     *error_type = TSQueryErrorLanguage;
     return NULL;
