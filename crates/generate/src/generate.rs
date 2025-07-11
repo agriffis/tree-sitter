@@ -14,7 +14,6 @@ use thiserror::Error;
 
 mod build_tables;
 mod dedup;
-mod grammar_files;
 mod grammars;
 mod nfa;
 mod node_types;
@@ -27,7 +26,7 @@ mod tables;
 use build_tables::build_tables;
 pub use build_tables::ParseTableBuilderError;
 use grammars::InputGrammar;
-pub use node_types::VariableInfoError;
+pub use node_types::{SuperTypeCycleError, VariableInfoError};
 use parse_grammar::parse_grammar;
 pub use parse_grammar::ParseGrammarError;
 use prepare_grammar::prepare_grammar;
@@ -70,6 +69,8 @@ pub enum GenerateError {
     BuildTables(#[from] ParseTableBuilderError),
     #[error(transparent)]
     ParseVersion(#[from] ParseVersionError),
+    #[error(transparent)]
+    SuperTypeCycle(#[from] SuperTypeCycleError),
 }
 
 impl From<std::io::Error> for GenerateError {
