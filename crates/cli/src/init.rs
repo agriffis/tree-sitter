@@ -98,27 +98,10 @@ const TESTS_SWIFT_TEMPLATE: &str = include_str!("./templates/tests.swift");
 const BUILD_ZIG_TEMPLATE: &str = include_str!("./templates/build.zig");
 const BUILD_ZIG_ZON_TEMPLATE: &str = include_str!("./templates/build.zig.zon");
 const ROOT_ZIG_TEMPLATE: &str = include_str!("./templates/root.zig");
+const TEST_ZIG_TEMPLATE: &str = include_str!("./templates/test.zig");
 
 const TREE_SITTER_JSON_SCHEMA: &str =
     "https://tree-sitter.github.io/tree-sitter/assets/schemas/config.schema.json";
-
-#[must_use]
-pub fn path_in_ignore(repo_path: &Path) -> bool {
-    [
-        "bindings",
-        "build",
-        "examples",
-        "node_modules",
-        "queries",
-        "script",
-        "src",
-        "target",
-        "test",
-        "types",
-    ]
-    .iter()
-    .any(|dir| repo_path.ends_with(dir))
-}
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct JsonConfigOpts {
@@ -182,7 +165,6 @@ impl JsonConfigOpts {
                         .expect("Failed to parse default repository URL")
                     }),
                     funding: self.funding,
-                    homepage: None,
                 }),
                 namespace: None,
             },
@@ -483,12 +465,12 @@ pub fn generate_grammar_files(
                     generate_file(path, MAKEFILE_TEMPLATE, language_name, &generate_opts)
                 },
                 |path| {
-                    let contents = fs::read_to_string(path)?;
+                    let mut contents = fs::read_to_string(path)?;
                     if !contents.contains("cd '$(DESTDIR)$(LIBDIR)' && ln -sf") {
                         eprintln!("Replacing Makefile");
                         generate_file(path, MAKEFILE_TEMPLATE, language_name, &generate_opts)?;
                     } else {
-                        let contents = contents
+                        contents = contents
                             .replace(
                                 indoc! {r"
                                 $(PARSER): $(SRC_DIR)/grammar.json
@@ -497,7 +479,7 @@ pub fn generate_grammar_files(
                                 indoc! {r"
                                 $(SRC_DIR)/grammar.json: grammar.js
                                 	$(TS) generate --stage=json $^
-                                
+
                                 $(PARSER): $(SRC_DIR)/grammar.json
                                 	$(TS) generate --stage=parser $^
                                 "}
@@ -729,22 +711,17 @@ pub fn generate_grammar_files(
     // Generate Swift bindings
     if tree_sitter_config.bindings.swift {
         missing_path(bindings_dir.join("swift"), create_dir)?.apply(|path| {
-            let lang_path = path.join(format!("TreeSitter{camel_name}"));
+            let lang_path = path.join(&class_name);
             missing_path(&lang_path, create_dir)?;
 
             missing_path(lang_path.join(format!("{language_name}.h")), |path| {
                 generate_file(path, PARSER_NAME_H_TEMPLATE, language_name, &generate_opts)
             })?;
 
-            missing_path(
-                path.join(format!("TreeSitter{camel_name}Tests")),
-                create_dir,
-            )?
-            .apply(|path| {
-                missing_path(
-                    path.join(format!("TreeSitter{camel_name}Tests.swift")),
-                    |path| generate_file(path, TESTS_SWIFT_TEMPLATE, language_name, &generate_opts),
-                )?;
+            missing_path(path.join(format!("{class_name}Tests")), create_dir)?.apply(|path| {
+                missing_path(path.join(format!("{class_name}Tests.swift")), |path| {
+                    generate_file(path, TESTS_SWIFT_TEMPLATE, language_name, &generate_opts)
+                })?;
 
                 Ok(())
             })?;
@@ -773,17 +750,39 @@ pub fn generate_grammar_files(
 
     // Generate Zig bindings
     if tree_sitter_config.bindings.zig {
-        missing_path(repo_path.join("build.zig"), |path| {
-            generate_file(path, BUILD_ZIG_TEMPLATE, language_name, &generate_opts)
-        })?;
+        missing_path_else(
+            repo_path.join("build.zig"),
+            allow_update,
+            |path| generate_file(path, BUILD_ZIG_TEMPLATE, language_name, &generate_opts),
+            |path| {
+                eprintln!("Replacing build.zig");
+                generate_file(path, BUILD_ZIG_TEMPLATE, language_name, &generate_opts)
+            },
+        )?;
 
-        missing_path(repo_path.join("build.zig.zon"), |path| {
-            generate_file(path, BUILD_ZIG_ZON_TEMPLATE, language_name, &generate_opts)
-        })?;
+        missing_path_else(
+            repo_path.join("build.zig.zon"),
+            allow_update,
+            |path| generate_file(path, BUILD_ZIG_ZON_TEMPLATE, language_name, &generate_opts),
+            |path| {
+                eprintln!("Replacing build.zig.zon");
+                generate_file(path, BUILD_ZIG_ZON_TEMPLATE, language_name, &generate_opts)
+            },
+        )?;
 
         missing_path(bindings_dir.join("zig"), create_dir)?.apply(|path| {
-            missing_path(path.join("root.zig"), |path| {
-                generate_file(path, ROOT_ZIG_TEMPLATE, language_name, &generate_opts)
+            missing_path_else(
+                path.join("root.zig"),
+                allow_update,
+                |path| generate_file(path, ROOT_ZIG_TEMPLATE, language_name, &generate_opts),
+                |path| {
+                    eprintln!("Replacing root.zig");
+                    generate_file(path, ROOT_ZIG_TEMPLATE, language_name, &generate_opts)
+                },
+            )?;
+
+            missing_path(path.join("test.zig"), |path| {
+                generate_file(path, TEST_ZIG_TEMPLATE, language_name, &generate_opts)
             })?;
 
             Ok(())
@@ -972,52 +971,47 @@ fn generate_file(
         }
     }
 
-    match generate_opts.license {
-        Some(license) => replacement = replacement.replace(PARSER_LICENSE_PLACEHOLDER, license),
-        _ => replacement = replacement.replace(PARSER_LICENSE_PLACEHOLDER, "MIT"),
+    if let Some(license) = generate_opts.license {
+        replacement = replacement.replace(PARSER_LICENSE_PLACEHOLDER, license);
+    } else {
+        replacement = replacement.replace(PARSER_LICENSE_PLACEHOLDER, "MIT");
     }
 
-    match generate_opts.description {
-        Some(description) => {
-            replacement = replacement.replace(PARSER_DESCRIPTION_PLACEHOLDER, description);
-        }
-        _ => {
-            replacement = replacement.replace(
-                PARSER_DESCRIPTION_PLACEHOLDER,
+    if let Some(description) = generate_opts.description {
+        replacement = replacement.replace(PARSER_DESCRIPTION_PLACEHOLDER, description);
+    } else {
+        replacement = replacement.replace(
+            PARSER_DESCRIPTION_PLACEHOLDER,
+            &format!(
+                "{} grammar for tree-sitter",
+                generate_opts.camel_parser_name,
+            ),
+        );
+    }
+
+    if let Some(repository) = generate_opts.repository {
+        replacement = replacement
+            .replace(
+                PARSER_URL_STRIPPED_PLACEHOLDER,
+                &repository.replace("https://", "").to_lowercase(),
+            )
+            .replace(PARSER_URL_PLACEHOLDER, &repository.to_lowercase());
+    } else {
+        replacement = replacement
+            .replace(
+                PARSER_URL_STRIPPED_PLACEHOLDER,
                 &format!(
-                    "{} grammar for tree-sitter",
-                    generate_opts.camel_parser_name,
+                    "github.com/tree-sitter/tree-sitter-{}",
+                    language_name.to_lowercase()
+                ),
+            )
+            .replace(
+                PARSER_URL_PLACEHOLDER,
+                &format!(
+                    "https://github.com/tree-sitter/tree-sitter-{}",
+                    language_name.to_lowercase()
                 ),
             );
-        }
-    }
-
-    match generate_opts.repository {
-        Some(repository) => {
-            replacement = replacement
-                .replace(
-                    PARSER_URL_STRIPPED_PLACEHOLDER,
-                    &repository.replace("https://", "").to_lowercase(),
-                )
-                .replace(PARSER_URL_PLACEHOLDER, &repository.to_lowercase());
-        }
-        _ => {
-            replacement = replacement
-                .replace(
-                    PARSER_URL_STRIPPED_PLACEHOLDER,
-                    &format!(
-                        "github.com/tree-sitter/tree-sitter-{}",
-                        language_name.to_lowercase()
-                    ),
-                )
-                .replace(
-                    PARSER_URL_PLACEHOLDER,
-                    &format!(
-                        "https://github.com/tree-sitter/tree-sitter-{}",
-                        language_name.to_lowercase()
-                    ),
-                );
-        }
     }
 
     if let Some(funding_url) = generate_opts.funding {
