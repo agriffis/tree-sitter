@@ -285,14 +285,36 @@ pub fn generate_grammar_files(
     };
 
     // Create package.json
-    missing_path(repo_path.join("package.json"), |path| {
-        generate_file(
-            path,
-            PACKAGE_JSON_TEMPLATE,
-            dashed_language_name.as_str(),
-            &generate_opts,
-        )
-    })?;
+    missing_path_else(
+        repo_path.join("package.json"),
+        allow_update,
+        |path| {
+            generate_file(
+                path,
+                PACKAGE_JSON_TEMPLATE,
+                dashed_language_name.as_str(),
+                &generate_opts,
+            )
+        },
+        |path| {
+            let contents = fs::read_to_string(path)?
+                .replace(
+                    r#""node-addon-api": "^8.3.1"#,
+                    r#""node-addon-api": "^8.5.0""#,
+                )
+                .replace(
+                    indoc! {r#"
+                    "prebuildify": "^6.0.1",
+                    "tree-sitter-cli":"#},
+                    indoc! {r#"
+                    "prebuildify": "^6.0.1",
+                    "tree-sitter": "^0.22.4",
+                    "tree-sitter-cli":"#},
+                );
+            write_file(path, contents)?;
+            Ok(())
+        },
+    )?;
 
     // Do not create a grammar.js file in a repo with multiple language configs
     if !tree_sitter_config.has_multiple_language_configs() {
@@ -389,6 +411,7 @@ pub fn generate_grammar_files(
                 |path| {
                     let contents = fs::read_to_string(path)?;
                     if !contents.contains("bun") {
+                        eprintln!("Replacing index.js");
                         generate_file(path, INDEX_JS_TEMPLATE, language_name, &generate_opts)?;
                     }
                     Ok(())
@@ -755,8 +778,13 @@ pub fn generate_grammar_files(
             allow_update,
             |path| generate_file(path, BUILD_ZIG_TEMPLATE, language_name, &generate_opts),
             |path| {
-                eprintln!("Replacing build.zig");
-                generate_file(path, BUILD_ZIG_TEMPLATE, language_name, &generate_opts)
+                let contents = fs::read_to_string(path)?;
+                if !contents.contains("b.pkg_hash.len") {
+                    eprintln!("Replacing build.zig");
+                    generate_file(path, BUILD_ZIG_TEMPLATE, language_name, &generate_opts)
+                } else {
+                    Ok(())
+                }
             },
         )?;
 
@@ -765,8 +793,13 @@ pub fn generate_grammar_files(
             allow_update,
             |path| generate_file(path, BUILD_ZIG_ZON_TEMPLATE, language_name, &generate_opts),
             |path| {
-                eprintln!("Replacing build.zig.zon");
-                generate_file(path, BUILD_ZIG_ZON_TEMPLATE, language_name, &generate_opts)
+                let contents = fs::read_to_string(path)?;
+                if !contents.contains(".name = .tree_sitter_") {
+                    eprintln!("Replacing build.zig.zon");
+                    generate_file(path, BUILD_ZIG_ZON_TEMPLATE, language_name, &generate_opts)
+                } else {
+                    Ok(())
+                }
             },
         )?;
 
@@ -776,8 +809,13 @@ pub fn generate_grammar_files(
                 allow_update,
                 |path| generate_file(path, ROOT_ZIG_TEMPLATE, language_name, &generate_opts),
                 |path| {
-                    eprintln!("Replacing root.zig");
-                    generate_file(path, ROOT_ZIG_TEMPLATE, language_name, &generate_opts)
+                    let contents = fs::read_to_string(path)?;
+                    if contents.contains("ts.Language") {
+                        eprintln!("Replacing root.zig");
+                        generate_file(path, ROOT_ZIG_TEMPLATE, language_name, &generate_opts)
+                    } else {
+                        Ok(())
+                    }
                 },
             )?;
 
