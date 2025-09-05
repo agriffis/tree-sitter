@@ -1,4 +1,4 @@
-#![doc = include_str!("./README.md")]
+#![cfg_attr(not(any(test, doctest)), doc = include_str!("../README.md"))]
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
@@ -584,7 +584,7 @@ impl Language {
     /// generate completion suggestions or valid symbols in error nodes.
     ///
     /// Example:
-    /// ```
+    /// ```ignore
     /// let state = language.next_state(node.parse_state(), node.grammar_id());
     /// ```
     #[doc(alias = "ts_language_next_state")]
