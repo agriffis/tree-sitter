@@ -106,6 +106,7 @@ window.initializePlayground = async (opts) => {
 
   const codeInput = document.getElementById("code-input");
   const languageSelect = document.getElementById("language-select");
+  const languageVersion = document.getElementById('language-version');
   const loggingCheckbox = document.getElementById("logging-checkbox");
   const anonymousNodes = document.getElementById('anonymous-nodes-checkbox');
   const outputContainer = document.getElementById("output-container");
@@ -126,8 +127,6 @@ window.initializePlayground = async (opts) => {
   await Parser.init();
 
   const parser = new Parser();
-
-  console.log(parser, codeInput, queryInput);
 
   const codeEditor = CodeMirror.fromTextArea(codeInput, {
     lineNumbers: true,
@@ -205,6 +204,15 @@ window.initializePlayground = async (opts) => {
 
     tree = null;
     languageName = newLanguageName;
+
+    const metadata = languagesByName[languageName].metadata;
+    if (metadata) {
+      languageVersion.textContent = `v${metadata.major_version}.${metadata.minor_version}.${metadata.patch_version}`;
+      languageVersion.style.visibility = 'visible';
+    } else {
+      languageVersion.style.visibility = 'hidden';
+    }
+
     parser.setLanguage(languagesByName[newLanguageName]);
     handleCodeChange();
     handleQueryChange();
@@ -507,6 +515,7 @@ window.initializePlayground = async (opts) => {
     selection.addRange(range);
     navigator.clipboard.writeText(selection.toString());
     selection.removeRange(range);
+    showToast('Tree copied to clipboard!');
   }
 
   function handleTreeClick(event) {
@@ -631,5 +640,24 @@ window.initializePlayground = async (opts) => {
       timeout = setTimeout(later, wait);
       if (callNow) func.apply(context, args);
     };
+  }
+
+  function showToast(message) {
+    const existingToast = document.querySelector('.toast');
+    if (existingToast) {
+      existingToast.remove();
+    }
+
+    const toast = document.createElement('div');
+    toast.className = 'toast';
+    toast.textContent = message;
+    document.body.appendChild(toast);
+
+    setTimeout(() => toast.classList.add('show'), 50);
+
+    setTimeout(() => {
+      toast.classList.remove('show');
+      setTimeout(() => toast.remove(), 200);
+    }, 1000);
   }
 };
