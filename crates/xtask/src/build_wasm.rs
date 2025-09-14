@@ -199,7 +199,7 @@ pub fn run_wasm(args: &BuildWasm) -> Result<()> {
         "-I", "lib/include",
         "--js-library", "lib/binding_web/lib/imports.js",
         "--pre-js",     "lib/binding_web/lib/prefix.js",
-        "-o",           if args.cjs { binding_file!("cjs") } else { binding_file!(".mjs") },
+        "-o",           if args.cjs { binding_file!(".cjs") } else { binding_file!(".mjs") },
         "lib/src/lib.c",
         "lib/binding_web/lib/tree-sitter.c",
     ]);
@@ -353,7 +353,6 @@ pub fn run_wasm_stdlib() -> Result<()> {
         .collect::<Vec<String>>();
 
     let clang_exe = get_wasi_binary()?;
-    println!("Using WASI clang at: {}", clang_exe.display());
 
     let output = Command::new(&clang_exe)
         .args([
@@ -361,6 +360,7 @@ pub fn run_wasm_stdlib() -> Result<()> {
             "stdlib.wasm",
             "-Os",
             "-fPIC",
+            "-DTREE_SITTER_FEATURE_WASM",
             "-Wl,--no-entry",
             "-Wl,--stack-first",
             "-Wl,-z",
@@ -371,6 +371,7 @@ pub fn run_wasm_stdlib() -> Result<()> {
             "-Wl,--strip-debug",
             "-Wl,--export=__wasm_call_ctors",
             "-Wl,--export=__stack_pointer",
+            "-Wl,--export=reset_heap",
         ])
         .args(&export_flags)
         .arg("lib/src/wasm/stdlib.c")
