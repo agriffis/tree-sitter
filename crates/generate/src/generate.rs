@@ -25,6 +25,8 @@ mod nfa;
 mod node_types;
 pub mod parse_grammar;
 mod prepare_grammar;
+#[cfg(feature = "qjs-rt")]
+mod quickjs;
 mod render;
 mod rules;
 mod tables;
@@ -63,8 +65,11 @@ struct GeneratedParser {
     node_types_json: String,
 }
 
+const LANGUAGE_VERSION: usize = 15;
+
 pub const ALLOC_HEADER: &str = include_str!("templates/alloc.h");
 pub const ARRAY_HEADER: &str = include_str!("templates/array.h");
+pub const PARSER_HEADER: &str = include_str!(concat!(env!("OUT_DIR"), "/parser.h"));
 
 pub type GenerateResult<T> = Result<T, GenerateError>;
 
@@ -150,6 +155,9 @@ pub enum JSError {
     Semver(String),
     #[error("Failed to serialze grammar JSON -- {0}")]
     Serialzation(String),
+    #[cfg(feature = "qjs-rt")]
+    #[error("QuickJS error: {0}")]
+    QuickJS(String),
 }
 
 #[cfg(feature = "load")]
@@ -173,7 +181,15 @@ impl From<semver::Error> for JSError {
     }
 }
 
+#[cfg(feature = "qjs-rt")]
+impl From<rquickjs::Error> for JSError {
+    fn from(value: rquickjs::Error) -> Self {
+        Self::QuickJS(value.to_string())
+    }
+}
+
 #[cfg(feature = "load")]
+#[allow(clippy::too_many_arguments)]
 pub fn generate_parser_in_directory<T, U, V>(
     repo_path: T,
     out_path: Option<U>,
@@ -258,7 +274,7 @@ where
     fs::create_dir_all(&header_path)?;
     write_file(&header_path.join("alloc.h"), ALLOC_HEADER)?;
     write_file(&header_path.join("array.h"), ARRAY_HEADER)?;
-    write_file(&header_path.join("parser.h"), tree_sitter::PARSER_HEADER)?;
+    write_file(&header_path.join("parser.h"), PARSER_HEADER)?;
 
     Ok(())
 }
@@ -271,7 +287,7 @@ pub fn generate_parser_for_grammar(
     let input_grammar = parse_grammar(&grammar_json)?;
     let parser = generate_parser_for_grammar_with_opts(
         &input_grammar,
-        tree_sitter::LANGUAGE_VERSION,
+        LANGUAGE_VERSION,
         semantic_version,
         None,
     )?;
@@ -415,10 +431,24 @@ pub fn load_grammar_file(
 fn load_js_grammar_file(grammar_path: &Path, js_runtime: Option<&str>) -> JSResult<String> {
     let grammar_path = fs::canonicalize(grammar_path)?;
 
+    let grammar_uses_commonjs = fs::read_to_string(&grammar_path)?.contains("module.exports");
+    if grammar_uses_commonjs {
+        eprintln!("Warning: Your grammar.js uses CommonJS.");
+        eprintln!("Consider migrating to ES modules (export default) for better compatibility.");
+        eprintln!(
+            "See: https://tree-sitter.github.io/tree-sitter/creating-parsers/#the-grammar-file"
+        );
+    }
+
     #[cfg(windows)]
     let grammar_path = url::Url::from_file_path(grammar_path)
         .expect("Failed to convert path to URL")
         .to_string();
+
+    #[cfg(feature = "qjs-rt")]
+    if js_runtime == Some("native") {
+        return quickjs::execute_native_runtime(&grammar_path);
+    }
 
     let js_runtime = js_runtime.unwrap_or("node");
 
