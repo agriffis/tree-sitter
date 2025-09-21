@@ -8,6 +8,7 @@ use std::{
 };
 
 use anyhow::Result;
+use log::warn;
 use node_types::VariableInfo;
 use regex::{Regex, RegexBuilder};
 use rules::{Alias, Symbol};
@@ -49,7 +50,7 @@ static JSON_COMMENT_REGEX: LazyLock<Regex> = LazyLock::new(|| {
         .unwrap()
 });
 
-struct JSONStageOutput {
+struct JSONOutput {
     #[cfg(feature = "load")]
     node_types_json: String,
     syntax_grammar: SyntaxGrammar,
@@ -71,7 +72,7 @@ const LANGUAGE_VERSION: usize = 15;
 
 pub const ALLOC_HEADER: &str = include_str!("templates/alloc.h");
 pub const ARRAY_HEADER: &str = include_str!("templates/array.h");
-pub const PARSER_HEADER: &str = include_str!(concat!(env!("OUT_DIR"), "/parser.h"));
+pub const PARSER_HEADER: &str = include_str!("parser.h.inc");
 
 pub type GenerateResult<T> = Result<T, GenerateError>;
 
@@ -255,8 +256,16 @@ where
     let semantic_version = read_grammar_version(&repo_path)?;
 
     if semantic_version.is_none() && abi_version > ABI_VERSION_MIN {
-        println!("Warning: No `tree-sitter.json` file found in your grammar, this file is required to generate with ABI {abi_version}. Using ABI version {ABI_VERSION_MIN} instead.");
-        println!("This file can be set up with `tree-sitter init`. For more information, see https://tree-sitter.github.io/tree-sitter/cli/init.");
+        warn!(
+            concat!(
+                "No `tree-sitter.json` file found in your grammar, ",
+                "this file is required to generate with ABI {}. ",
+                "Using ABI version {} instead.\n",
+                "This file can be set up with `tree-sitter init`. ",
+                "For more information, see https://tree-sitter.github.io/tree-sitter/cli/init."
+            ),
+            abi_version, ABI_VERSION_MIN
+        );
         abi_version = ABI_VERSION_MIN;
     }
 
@@ -296,9 +305,7 @@ pub fn generate_parser_for_grammar(
     Ok((input_grammar.name, parser.c_code))
 }
 
-fn generate_node_types_from_grammar(
-    input_grammar: &InputGrammar,
-) -> GenerateResult<JSONStageOutput> {
+fn generate_node_types_from_grammar(input_grammar: &InputGrammar) -> GenerateResult<JSONOutput> {
     let (syntax_grammar, lexical_grammar, inlines, simple_aliases) =
         prepare_grammar(input_grammar)?;
     let variable_info =
@@ -311,7 +318,7 @@ fn generate_node_types_from_grammar(
         &simple_aliases,
         &variable_info,
     )?;
-    Ok(JSONStageOutput {
+    Ok(JSONOutput {
         #[cfg(feature = "load")]
         node_types_json: serde_json::to_string_pretty(&node_types_json).unwrap(),
         syntax_grammar,
@@ -328,7 +335,7 @@ fn generate_parser_for_grammar_with_opts(
     semantic_version: Option<(u8, u8, u8)>,
     report_symbol_name: Option<&str>,
 ) -> GenerateResult<GeneratedParser> {
-    let JSONStageOutput {
+    let JSONOutput {
         syntax_grammar,
         lexical_grammar,
         inlines,
@@ -537,9 +544,9 @@ pub fn write_file(path: &Path, body: impl AsRef<[u8]>) -> GenerateResult<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::LANGUAGE_VERSION;
+    use super::{LANGUAGE_VERSION, PARSER_HEADER};
     #[test]
-    fn the_language_versions_are_in_sync() {
+    fn test_language_versions_are_in_sync() {
         let api_h = include_str!("../../../lib/include/tree_sitter/api.h");
         let api_language_version = api_h
             .lines()
@@ -550,5 +557,14 @@ mod tests {
             })
             .expect("Failed to find TREE_SITTER_LANGUAGE_VERSION definition in api.h");
         assert_eq!(LANGUAGE_VERSION, api_language_version);
+    }
+
+    #[test]
+    fn test_parser_header_in_sync() {
+        let parser_h = include_str!("../../../lib/src/parser.h");
+        assert!(
+            parser_h == PARSER_HEADER,
+            "parser.h.inc is out of sync with lib/src/parser.h. Run: cp lib/src/parser.h crates/generate/src/parser.h.inc"
+        );
     }
 }
