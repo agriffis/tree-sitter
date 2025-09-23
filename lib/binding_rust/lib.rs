@@ -1,4 +1,4 @@
-#![cfg_attr(not(any(test, doctest)), doc = include_str!("../README.md"))]
+#![cfg_attr(not(any(test, doctest)), doc = include_str!("./README.md"))]
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
@@ -351,7 +351,7 @@ impl From<ffi::TSQuantifier> for CaptureQuantifier {
             ffi::TSQuantifierZeroOrMore => Self::ZeroOrMore,
             ffi::TSQuantifierOne => Self::One,
             ffi::TSQuantifierOneOrMore => Self::OneOrMore,
-            _ => panic!("Unrecognized quantifier: {value}"),
+            _ => unreachable!(),
         }
     }
 }

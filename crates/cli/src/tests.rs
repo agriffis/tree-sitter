@@ -1,11 +1,10 @@
-mod async_context_test;
+mod async_boundary_test;
 mod corpus_test;
 mod detect_language;
 mod helpers;
 mod highlight_test;
 mod language_test;
 mod node_test;
-mod parser_hang_test;
 mod parser_test;
 mod pathological_test;
 mod query_test;
