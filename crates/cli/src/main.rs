@@ -32,6 +32,7 @@ use tree_sitter_cli::{
     wasm,
 };
 use tree_sitter_config::Config;
+use tree_sitter_generate::OptLevel;
 use tree_sitter_highlight::Highlighter;
 use tree_sitter_loader::{self as loader, Bindings, TreeSitterJSON};
 use tree_sitter_tags::TagsContext;
@@ -162,6 +163,11 @@ struct Generate {
     /// The name or path of the JavaScript runtime to use for generating parsers, specify `native`
     /// to use the native `QuickJS` runtime
     pub js_runtime: Option<String>,
+
+    /// Disable optimizations when generating the parser. Currently, this only affects
+    /// the merging of compatible parse states.
+    #[arg(long)]
+    pub disable_optimizations: bool,
 }
 
 #[derive(Args)]
@@ -868,6 +874,11 @@ impl Generate {
             self.report_states_for_rule.as_deref(),
             self.js_runtime.as_deref(),
             self.emit != GenerationEmit::Json,
+            if self.disable_optimizations {
+                OptLevel::empty()
+            } else {
+                OptLevel::default()
+            },
         ) {
             if self.json {
                 eprintln!("{}", serde_json::to_string_pretty(&err)?);
@@ -1055,6 +1066,7 @@ impl Parse {
                     .map(|p| p.to_string_lossy().chars().count())
                     .max()
                     .unwrap_or(0);
+                options.stats.source_count = paths.len();
 
                 for path in &paths {
                     let path = Path::new(&path);

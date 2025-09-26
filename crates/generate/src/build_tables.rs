@@ -27,6 +27,7 @@ use crate::{
     node_types::VariableInfo,
     rules::{AliasMap, Symbol, SymbolType, TokenSet},
     tables::{LexTable, ParseAction, ParseTable, ParseTableEntry},
+    OptLevel,
 };
 
 pub struct Tables {
@@ -43,6 +44,7 @@ pub fn build_tables(
     variable_info: &[VariableInfo],
     inlines: &InlinedProductionMap,
     report_symbol_name: Option<&str>,
+    optimizations: OptLevel,
 ) -> BuildTableResult<Tables> {
     let item_set_builder = ParseItemSetBuilder::new(syntax_grammar, lexical_grammar, inlines);
     let following_tokens =
@@ -78,6 +80,7 @@ pub fn build_tables(
         simple_aliases,
         &token_conflict_map,
         &keywords,
+        optimizations,
     );
     let lex_tables = build_lex_table(
         &mut parse_table,
@@ -98,6 +101,10 @@ pub fn build_tables(
             &parse_state_info,
             report_symbol_name,
         );
+    }
+
+    if parse_table.states.len() > u16::MAX as usize {
+        Err(ParseTableBuilderError::StateCount(parse_table.states.len()))?;
     }
 
     Ok(Tables {
