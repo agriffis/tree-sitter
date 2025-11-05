@@ -17,9 +17,17 @@ function git_version {
   # then the rest from master. This results in an inflated number of commits,
   # but it remains in sequence, so it doesn't hurt.
   declare describe tag commits hash ignore
-  tag=$(git tag | sort -rV | grep -Em1 '^v[0-9.]+$')
+  tag=$(
+    # Ignore bogus tags.
+    git for-each-ref --format='%(refname:short) %(objectname)' refs/tags \
+      | grep -vFx "v0.26.0-pre 513a37939ab1a72c24608654426a7cf82472052f" \
+      | grep -vFx "v0.26.0 250bf47d970236bf4dc1043f284aa5a79c872a09" \
+      | sort -rV \
+      | awk '{print $1}' \
+      | grep -Em1 '^v[0-9.]+$'
+  )
   describe=$(git describe --first-parent --tags --long origin/master)
-  if [[ $describe == release-* ]]; then
+  if [[ $describe == *-*-*-* ]]; then
     read ignore ignore commits hash <<<"${describe//-/ }"
   else
     read ignore commits hash <<<"${describe//-/ }"
