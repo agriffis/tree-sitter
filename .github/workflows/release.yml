@@ -67,6 +67,7 @@ jobs:
   crates_io:
     name: Publish packages to Crates.io
     runs-on: ubuntu-latest
+    if: false
     environment: crates
     permissions:
       id-token: write
@@ -91,6 +92,7 @@ jobs:
   npm:
     name: Publish packages to npmjs.com
     runs-on: ubuntu-latest
+    if: false
     environment: npm
     permissions:
       id-token: write
