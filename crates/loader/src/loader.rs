@@ -450,7 +450,6 @@ pub struct Links {
 pub struct Bindings {
     pub c: bool,
     pub go: bool,
-    #[serde(skip)]
     pub java: bool,
     #[serde(skip)]
     pub kotlin: bool,
@@ -464,12 +463,12 @@ pub struct Bindings {
 impl Bindings {
     /// return available languages and its default enabled state.
     #[must_use]
-    pub const fn languages(&self) -> [(&'static str, bool); 7] {
+    pub const fn languages(&self) -> [(&'static str, bool); 8] {
         [
             ("c", true),
             ("go", true),
-            // Comment out Java and Kotlin until the bindings are actually available.
-            // ("java", false),
+            ("java", false),
+            // Comment out Kotlin until the bindings are actually available.
             // ("kotlin", false),
             ("node", true),
             ("python", true),
@@ -500,8 +499,8 @@ impl Bindings {
             match v {
                 "c" => out.c = true,
                 "go" => out.go = true,
-                // Comment out Java and Kotlin until the bindings are actually available.
-                // "java" => out.java = true,
+                "java" => out.java = true,
+                // Comment out Kotlin until the bindings are actually available.
                 // "kotlin" => out.kotlin = true,
                 "node" => out.node = true,
                 "python" => out.python = true,
@@ -1702,7 +1701,7 @@ impl Loader {
 
     pub fn select_language(
         &mut self,
-        path: &Path,
+        path: Option<&Path>,
         current_dir: &Path,
         scope: Option<&str>,
         // path to dynamic library, name of language
@@ -1720,7 +1719,7 @@ impl Loader {
             } else {
                 Err(LoaderError::UnknownScope(scope.to_string()))
             }
-        } else if let Some((lang, _)) =
+        } else if let Some((lang, _)) = if let Some(path) = path {
             self.language_configuration_for_file_name(path)
                 .map_err(|e| {
                     LoaderError::FileNameLoad(
@@ -1728,7 +1727,9 @@ impl Loader {
                         Box::new(e),
                     )
                 })?
-        {
+        } else {
+            None
+        } {
             Ok(lang)
         } else if let Some(id) = self.language_configuration_in_current_path {
             Ok(self.language_for_id(self.language_configurations[id].language_id)?)
@@ -1739,7 +1740,11 @@ impl Loader {
             .cloned()
         {
             Ok(lang.0)
-        } else if let Some(lang) = self.language_configuration_for_first_line_regex(path)? {
+        } else if let Some(lang) = if let Some(path) = path {
+            self.language_configuration_for_first_line_regex(path)?
+        } else {
+            None
+        } {
             Ok(lang.0)
         } else {
             Err(LoaderError::NoLanguage)

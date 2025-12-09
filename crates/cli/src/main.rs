@@ -772,6 +772,14 @@ impl Init {
                     .map(|e| Some(e.trim().to_string()))
             };
 
+            let namespace = || {
+                Input::<String>::with_theme(&ColorfulTheme::default())
+                    .with_prompt("Package namespace")
+                    .default("io.github.tree-sitter".to_string())
+                    .allow_empty(true)
+                    .interact()
+            };
+
             let bindings = || {
                 let languages = Bindings::default().languages();
 
@@ -801,6 +809,7 @@ impl Init {
                 "author",
                 "email",
                 "url",
+                "namespace",
                 "bindings",
                 "exit",
             ];
@@ -821,6 +830,7 @@ impl Init {
                         "author" => opts.author = author()?,
                         "email" => opts.email = email()?,
                         "url" => opts.url = url()?,
+                        "namespace" => opts.namespace = Some(namespace()?),
                         "bindings" => opts.bindings = bindings()?,
                         "exit" => break,
                         _ => unreachable!(),
@@ -1109,7 +1119,7 @@ impl Parse {
                     let path = Path::new(&path);
                     let language = loader
                         .select_language(
-                            path,
+                            Some(path),
                             current_dir,
                             self.scope.as_deref(),
                             lib_info.as_ref(),
@@ -1140,7 +1150,12 @@ impl Parse {
 
                 let language = if let Some(ref lib_path) = self.lib_path {
                     &loader
-                        .select_language(lib_path, current_dir, None, lib_info.as_ref())
+                        .select_language(
+                            None,
+                            current_dir,
+                            self.scope.as_deref(),
+                            lib_info.as_ref(),
+                        )
                         .with_context(|| {
                             anyhow!(
                                 "Failed to load language for path \"{}\"",
@@ -1174,8 +1189,12 @@ impl Parse {
 
                 let path = get_tmp_source_file(&contents)?;
                 let name = "stdin";
-                let language =
-                    loader.select_language(&path, current_dir, None, lib_info.as_ref())?;
+                let language = loader.select_language(
+                    None,
+                    current_dir,
+                    self.scope.as_deref(),
+                    lib_info.as_ref(),
+                )?;
 
                 parse::parse_file_at_path(
                     &mut parser,
@@ -1256,7 +1275,7 @@ impl Test {
             let lib_info =
                 get_lib_info(self.lib_path.as_ref(), self.lang_name.as_ref(), current_dir);
             &loader
-                .select_language(lib_path, current_dir, None, lib_info.as_ref())
+                .select_language(None, current_dir, None, lib_info.as_ref())
                 .with_context(|| {
                     anyhow!(
                         "Failed to load language for path \"{}\"",
@@ -1437,7 +1456,7 @@ impl Fuzz {
             let lang_name = lib_info.1.to_string();
             &(
                 loader
-                    .select_language(lib_path, current_dir, None, Some(&lib_info))
+                    .select_language(None, current_dir, None, Some(&lib_info))
                     .with_context(|| {
                         anyhow!(
                             "Failed to load language for path \"{}\"",
@@ -1505,7 +1524,7 @@ impl Query {
         match input {
             CliInput::Paths(paths) => {
                 let language = loader.select_language(
-                    Path::new(&paths[0]),
+                    Some(Path::new(&paths[0])),
                     current_dir,
                     self.scope.as_deref(),
                     lib_info.as_ref(),
@@ -1541,7 +1560,7 @@ impl Query {
                 let languages = loader.languages_at_path(current_dir)?;
                 let language = if let Some(ref lib_path) = self.lib_path {
                     &loader
-                        .select_language(lib_path, current_dir, None, lib_info.as_ref())
+                        .select_language(None, current_dir, None, lib_info.as_ref())
                         .with_context(|| {
                             anyhow!(
                                 "Failed to load language for path \"{}\"",
@@ -1575,7 +1594,7 @@ impl Query {
 
                 let path = get_tmp_source_file(&contents)?;
                 let language =
-                    loader.select_language(&path, current_dir, None, lib_info.as_ref())?;
+                    loader.select_language(None, current_dir, None, lib_info.as_ref())?;
                 let opts = QueryFileOptions {
                     ordered_captures: self.captures,
                     byte_range,
