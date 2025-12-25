@@ -515,7 +515,6 @@ pub fn parse_file_at_path(
 
         if opts.output == ParseOutput::Cst {
             render_cst(&source_code, &tree, &mut cursor, opts, &mut stdout)?;
-            println!();
         }
 
         if opts.output == ParseOutput::Xml {
@@ -785,7 +784,7 @@ pub fn render_cst<'a, 'b: 'a>(
         .map(|(row, col)| (row as f64).log10() as usize + (col.len() as f64).log10() as usize + 1)
         .max()
         .unwrap_or(1);
-    let mut indent_level = 1;
+    let mut indent_level = usize::from(!opts.no_ranges);
     let mut did_visit_children = false;
     let mut in_error = false;
     loop {
