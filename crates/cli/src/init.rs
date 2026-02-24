@@ -892,7 +892,7 @@ pub fn generate_grammar_files(
                 },
                 |path| {
                     let contents = fs::read_to_string(path)?;
-                    if !contents.contains("uncomment these to include any queries") {
+                    if contents.contains("uncomment these to include any queries") {
                         info!("Replacing __init__.py");
                         generate_file(path, INIT_PY_TEMPLATE, language_name, &generate_opts)?;
                     }
@@ -1038,11 +1038,20 @@ pub fn generate_grammar_files(
                             "https://github.com/ChimeHQ/SwiftTreeSitter",
                             "https://github.com/tree-sitter/swift-tree-sitter",
                         )
+                        .replace("// swift-tools-version:5.3", "// swift-tools-version:5.6")
+                        .replace(
+                            "\nvar sources =",
+                            "\nlet dir = Context.packageDirectory\nvar sources =",
+                        )
+                        .replace(
+                            "atPath: \"src/scanner.c\"",
+                            "atPath: \"\\(dir)/src/scanner.c\"",
+                        )
                         .replace("version: \"0.8.0\")", "version: \"0.9.0\")")
                         .replace("(url:", "(name: \"SwiftTreeSitter\", url:");
                     if !replaced_contents.eq(&contents) {
-                        info!("Updating tree-sitter dependency in Package.swift");
-                        write_file(path, contents)?;
+                        info!("Updating Package.swift");
+                        write_file(path, replaced_contents)?;
                     }
                     Ok(())
                 },
