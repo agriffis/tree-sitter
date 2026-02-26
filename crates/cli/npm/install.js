@@ -51,7 +51,7 @@ if (!platform || !platform.name || !arch || !arch.name) {
 }
 
 const releaseURL = `https://github.com/tree-sitter/tree-sitter/releases/download/v${packageJSON.version}`;
-const assetName = `tree-sitter-${platform.name}-${arch.name}.gz`;
+const assetName = `tree-sitter-cli-${platform.name}-${arch.name}.zip`;
 const assetURL = `${releaseURL}/${assetName}`;
 
 // Remove previously-downloaded files.
@@ -75,7 +75,7 @@ get(assetURL, response => {
     ].join('\n'));
     process.exit(1);
   }
-  response.pipe(zlib.createGunzip()).pipe(file);
+  response.pipe(zlib.createUnzip()).pipe(file);
 });
 
 file.on('finish', () => {
