@@ -3,11 +3,10 @@ use std::fmt;
 use crate::{
     grammars::LexicalGrammar,
     rules::Symbol,
-    tables::{ParseStateId, ParseTable},
+    tables::ParseTable,
 };
 
 pub struct CoincidentTokenIndex<'a> {
-    entries: Vec<Vec<ParseStateId>>,
     /// Flat bitset for fast `contains()` checks. Indexed as `a * n + b`
     /// (both `(a,b)` and `(b,a)` bits are set, so no min/max normalization needed).
     contains_bits: Vec<u64>,
@@ -26,14 +25,13 @@ impl<'a> CoincidentTokenIndex<'a> {
         let mut result = Self {
             n,
             grammar: lexical_grammar,
-            entries: vec![Vec::new(); n * n],
             contains_bits: vec![0u64; (n * n).div_ceil(64)],
             row_bits: vec![0u64; n * row_words],
         };
         // Pre-collect terminal indices up front rather than continuously recomputing within the
         // loop below.
         let mut terminal_indices = Vec::new();
-        for (i, state) in table.states.iter().enumerate() {
+        for state in table.states.iter() {
             terminal_indices.clear();
             terminal_indices.extend(
                 state
@@ -44,10 +42,6 @@ impl<'a> CoincidentTokenIndex<'a> {
             );
             for (j, &a) in terminal_indices.iter().enumerate() {
                 for &b in &terminal_indices[j..] {
-                    let index = result.index(a, b);
-                    if result.entries[index].last().copied() != Some(i) {
-                        result.entries[index].push(i);
-                    }
                     // Set both (a,b) and (b,a) bits so `contains()` needs
                     // no min/max normalization.
                     let ab = a * n + b;
@@ -63,43 +57,30 @@ impl<'a> CoincidentTokenIndex<'a> {
         result
     }
 
-    pub fn states_with(&self, a: Symbol, b: Symbol) -> &[ParseStateId] {
-        &self.entries[self.index(a.index, b.index)]
-    }
-
     pub fn contains(&self, a: Symbol, b: Symbol) -> bool {
         let bit_index = a.index * self.n + b.index;
         self.contains_bits[bit_index / 64] & (1u64 << (bit_index % 64)) != 0
-    }
-
-    #[must_use]
-    const fn index(&self, a: usize, b: usize) -> usize {
-        if a < b {
-            a * self.n + b
-        } else {
-            b * self.n + a
-        }
     }
 }
 
 impl fmt::Debug for CoincidentTokenIndex<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         writeln!(f, "CoincidentTokenIndex {{")?;
-
-        writeln!(f, "  entries: {{")?;
         for i in 0..self.n {
-            writeln!(f, "    {}: {{", self.grammar.variables[i].name)?;
+            let mut coincident = Vec::new();
             for j in 0..self.n {
+                if self.contains(Symbol::terminal(i), Symbol::terminal(j)) {
+                    coincident.push(&self.grammar.variables[j].name);
+                }
+            }
+            if !coincident.is_empty() {
                 writeln!(
                     f,
-                    "      {}: {:?},",
-                    self.grammar.variables[j].name,
-                    self.entries[self.index(i, j)].len()
+                    "  {}: {:?},",
+                    self.grammar.variables[i].name, coincident
                 )?;
             }
-            writeln!(f, "    }},")?;
         }
-        write!(f, "  }},")?;
         write!(f, "}}")?;
         Ok(())
     }

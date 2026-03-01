@@ -391,13 +391,12 @@ fn identify_keywords(
                 // If the word token was already valid in every state containing
                 // this keyword candidate, then substituting the word token won't
                 // introduce any new lexical conflicts.
-                if coincident_token_index
-                    .states_with(*token, Symbol::terminal(other_index))
-                    .iter()
-                    .all(|state_id| {
-                        parse_table.states[*state_id]
-                            .terminal_entries
-                            .contains_key(&word_token)
+                let other = Symbol::terminal(other_index);
+                if !coincident_token_index.contains(*token, other)
+                    || parse_table.states.iter().all(|state| {
+                        !state.terminal_entries.contains_key(token)
+                            || !state.terminal_entries.contains_key(&other)
+                            || state.terminal_entries.contains_key(&word_token)
                     })
                 {
                     continue;
