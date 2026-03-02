@@ -1276,6 +1276,8 @@ impl Loader {
             } else {
                 command.arg("-shared");
                 command.arg("-Wl,--no-undefined");
+                #[cfg(target_os = "openbsd")]
+                command.arg("-lc");
             }
             command.args(cc_config.get_files());
             command.arg("-o").arg(output_path);
@@ -1710,7 +1712,7 @@ impl Loader {
                 match configuration.highlight_config(language, None) {
                     Err(e) => {
                         error!(
-                            "Failed to load higlight config for injection string '{string}': {e}"
+                            "Failed to load highlight config for injection string '{string}': {e}"
                         );
                         None
                     }

@@ -184,7 +184,7 @@ pub enum JSError {
     RelativePath,
     #[error("Could not parse this package's version as semver -- {0}")]
     Semver(String),
-    #[error("Failed to serialze grammar JSON -- {0}")]
+    #[error("Failed to serialize grammar JSON -- {0}")]
     Serialzation(String),
     #[cfg(feature = "qjs-rt")]
     #[error("QuickJS error: {0}")]

@@ -122,7 +122,7 @@ Additionally, if you want to run a particular _example_ from the corpus, you can
 cargo xtask test -l javascript -e Arrays
 ```
 
-If you are using `lldb` to debug the C library, tree-sitter provides custom pretty printers for several of its types. 
+If you are using `lldb` to debug the C library, tree-sitter provides custom pretty printers for several of its types.
 You can enable these helpers by importing them:
 
 ```sh
@@ -161,7 +161,7 @@ published as [`tree_sitter`][go package] on [pkg.go.dev][go.dev].
 
 Treesitter follows [semver](https://semver.org) (pre-1.0.0) with a dual development strategy:
 * All development happens on the **`master` branch**, i.e., any new PR (bugfix or feature) must target `master`.
-* Applicable bugfixes and minor improvements are backported to the latest **`release-0.x` branch**, where `x` is the latest minor version. This can be automated by adding the `ci:backport release-0.x` lable to the PR. _No new features or breaking changes should be backported_; this is important to make sure that patch releases are drop-in replacements that are always safe to update to (i.e., downstream users should never have to check patch versions for input or output changes)!
+* Applicable bugfixes and minor improvements are backported to the latest **`release-0.x` branch**, where `x` is the latest minor version. This can be automated by adding the `ci:backport release-0.x` label to the PR. _No new features or breaking changes should be backported_; this is important to make sure that patch releases are drop-in replacements that are always safe to update to (i.e., downstream users should never have to check patch versions for input or output changes)!
 
 **Important:** All crates within the project (see above) are versioned in lockstep with the exception of [`tree-sitter-language`][language crate], which is versioned independently and only bumped when necessary.
 

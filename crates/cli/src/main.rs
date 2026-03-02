@@ -1006,7 +1006,7 @@ impl Build {
                     .context("Output path must have a parent")?;
                 let name = full_path
                     .file_name()
-                    .context("Ouput path must have a filename")?;
+                    .context("Output path must have a filename")?;
                 fs::create_dir_all(parent_path).context("Failed to create output path")?;
                 let mut canon_path = parent_path.canonicalize().context("Invalid output path")?;
                 canon_path.push(name);
