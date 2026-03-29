@@ -1702,7 +1702,7 @@ impl Loader {
     ) -> Option<&'a HighlightConfiguration> {
         match self.language_configuration_for_injection_string(string) {
             Err(e) => {
-                error!("Failed to load language for injection string '{string}': {e}",);
+                error!("Failed to load language for injection string '{string}': {e}");
                 None
             }
             Ok(None) => None,
@@ -1746,7 +1746,7 @@ impl Loader {
                     let language_path =
                         parser_path.join(grammar.path.unwrap_or_else(|| PathBuf::from(".")));
 
-                    // Determine if a previous language configuration in this package.json file
+                    // Determine if a previous language configuration in this tree-sitter.json file
                     // already uses the same language.
                     let mut language_id = None;
                     for (id, (path, _, _)) in

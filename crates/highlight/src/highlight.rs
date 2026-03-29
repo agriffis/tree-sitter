@@ -468,7 +468,7 @@ impl HighlightConfiguration {
     /// and `function.builtin.constructor`, but will not match `function.method`.
     ///
     /// When highlighting, results are returned as `Highlight` values, which contain the index
-    /// of the matched highlight this list of highlight names.
+    /// of the matched highlight in this list of highlight names.
     pub fn configure(&mut self, recognized_names: &[impl AsRef<str>]) {
         let mut capture_parts = Vec::new();
         self.highlight_indices.clear();
@@ -1338,28 +1338,22 @@ fn injection_for_match<'a>(
             // In addition to specifying the language name via the text of a
             // captured node, it can also be hard-coded via a `#set!` predicate
             // that sets the injection.language key.
-            "injection.language" => {
-                if language_name.is_none() {
-                    language_name = prop.value.as_ref().map(std::convert::AsRef::as_ref);
-                }
+            "injection.language" if language_name.is_none() => {
+                language_name = prop.value.as_ref().map(std::convert::AsRef::as_ref);
             }
 
             // Setting the `injection.self` key can be used to specify that the
             // language name should be the same as the language of the current
             // layer.
-            "injection.self" => {
-                if language_name.is_none() {
-                    language_name = Some(config.language_name.as_str());
-                }
+            "injection.self" if language_name.is_none() => {
+                language_name = Some(config.language_name.as_str());
             }
 
             // Setting the `injection.parent` key can be used to specify that
             // the language name should be the same as the language of the
             // parent layer
-            "injection.parent" => {
-                if language_name.is_none() {
-                    language_name = parent_name;
-                }
+            "injection.parent" if language_name.is_none() => {
+                language_name = parent_name;
             }
 
             // By default, injections do not include the *children* of an
