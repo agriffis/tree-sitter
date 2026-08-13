@@ -1116,6 +1116,8 @@ static bool ts_wasm_store__instantiate(
   char *language_function_name = NULL;
   wasmtime_extern_t *imports = NULL;
   wasmtime_context_t *context = wasmtime_store_context(self->store);
+  uint32_t initial_memory_offset = self->current_memory_offset;
+  uint32_t initial_function_table_offset = self->current_function_table_offset;
 
   // Grow the function table to make room for the new functions.
   wasmtime_val_t initializer = {.kind = WASMTIME_FUNCREF};
@@ -1282,6 +1284,8 @@ static bool ts_wasm_store__instantiate(
   return true;
 
 error:
+  self->current_memory_offset = initial_memory_offset;
+  self->current_function_table_offset = initial_function_table_offset;
   if (language_function_name) ts_free(language_function_name);
   if (message.size) wasm_byte_vec_delete(&message);
   if (error) wasmtime_error_delete(error);
@@ -1307,6 +1311,8 @@ const TSLanguage *ts_wasm_store_load_language(
   TSLanguage *language = NULL;
   StringData symbol_name_buffer = array_new();
   StringData field_name_buffer = array_new();
+  uint32_t initial_memory_offset = self->current_memory_offset;
+  uint32_t initial_function_table_offset = self->current_function_table_offset;
   wasm_error->kind = TSWasmErrorKindNone;
 
   if (!wasm_dylink_info__parse((const unsigned char *)wasm, wasm_len, &dylink_info)) {
@@ -1677,6 +1683,8 @@ invalid_language_memory:
   goto error;
 
 error:
+  self->current_memory_offset = initial_memory_offset;
+  self->current_function_table_offset = initial_function_table_offset;
   delete_partially_loaded_language(language, &symbol_name_buffer, &field_name_buffer);
   if (module) wasmtime_module_delete(module);
   return NULL;
@@ -1708,6 +1716,8 @@ bool ts_wasm_store_add_language(
   // If the language module has not been instantiated in this store, then add
   // it to this store.
   if (!exists) {
+    uint32_t initial_memory_offset = self->current_memory_offset;
+    uint32_t initial_function_table_offset = self->current_function_table_offset;
     *index = self->language_instances.size;
     char *message;
     wasmtime_instance_t instance;
@@ -1732,6 +1742,8 @@ bool ts_wasm_store_add_language(
       .size = wasmtime_memory_data_size(context, &self->memory),
     };
     if (!wasm_memory__read(&wasm_memory, language_address, &wasm_language, sizeof(LanguageInWasmMemory))) {
+      self->current_memory_offset = initial_memory_offset;
+      self->current_function_table_offset = initial_function_table_offset;
       return false;
     }
     array_push(&self->language_instances, ((LanguageWasmInstance) {
