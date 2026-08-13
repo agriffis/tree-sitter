@@ -226,6 +226,7 @@ fn get_language(path: &Path) -> Language {
 
 #[cfg(feature = "wasm")]
 fn get_wasm_language(language_name: &str, parser: &mut Parser) -> Language {
+    let wasm_language_name = language_name.replace('-', "_");
     let wasm_path = ROOT_DIR
         .join("target")
         .join("release")
@@ -240,7 +241,7 @@ fn get_wasm_language(language_name: &str, parser: &mut Parser) -> Language {
         .unwrap();
     let mut store = WasmStore::new(&WASM_ENGINE).expect("Failed to create Wasm store");
     let language = store
-        .load_language(language_name, &wasm)
+        .load_language(&wasm_language_name, &wasm)
         .with_context(|| format!("Failed to load Wasm language at {}", wasm_path.display()))
         .unwrap();
     parser.set_wasm_store(store).unwrap();
