@@ -49,7 +49,7 @@ tree-sitter-language.workspace = true
 [dependencies.wasmtime-c-api]
 version = "47.0.3"
 default-features = false
-features         = [ "cranelift", "gc-drc" ]
+features         = [ "cranelift", "gc", "gc-drc" ]
 optional         = true
 package          = "wasmtime-c-api-impl"
 
