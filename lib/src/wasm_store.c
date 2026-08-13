@@ -565,7 +565,8 @@ static void delete_partially_loaded_language(
 }
 
 static bool name_eq(const wasm_name_t *name, const char *string) {
-  return strncmp(string, name->data, name->size) == 0;
+  size_t length = strlen(string);
+  return name->size == length && memcmp(name->data, string, length) == 0;
 }
 
 static inline wasm_functype_t* wasm_functype_new_4_0(
