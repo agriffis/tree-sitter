@@ -254,13 +254,14 @@ impl Default for OptLevel {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum Diagnostic {
     UnnecessaryConflicts(Vec<Vec<String>>),
     UnaryChoice { name: Option<String> },
     UnarySeq { name: Option<String> },
     EmptyStringMatch(String),
     UnsupportedRegexFlag { flag: char, pattern: String },
+    SupertypeInlined { name: String },
 }
 
 impl std::fmt::Display for Diagnostic {
@@ -304,6 +305,12 @@ impl std::fmt::Display for Diagnostic {
             }
             Self::UnsupportedRegexFlag { flag, pattern } => {
                 write!(f, "unsupported regex flag `{flag}` in pattern `{pattern}`")?;
+            }
+            Self::SupertypeInlined { name } => {
+                write!(
+                    f,
+                    "rule `{name}` is both a supertype and inlined. the supertype is ignored."
+                )?;
             }
         }
         Ok(())
@@ -461,7 +468,7 @@ fn generate_node_types_from_grammar(
     )?;
     Ok(JSONOutput {
         #[cfg(feature = "load")]
-        node_types_json: serde_json::to_string_pretty(&node_types_json).unwrap(),
+        node_types_json,
         syntax_grammar,
         lexical_grammar,
         inlines,
