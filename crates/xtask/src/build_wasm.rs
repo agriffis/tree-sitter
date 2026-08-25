@@ -76,8 +76,6 @@ const WASI_LIBC_FILES: &[&str] = &[
     "string/memcpy.c",
     "string/memmove.c",
     "string/memset.c",
-    "string/strchr.c",
-    "string/strchrnul.c",
     "string/strcmp.c",
     "string/strlen.c",
     "string/stpncpy.c",
@@ -734,7 +732,6 @@ pub fn run_wasm_stdlib() -> Result<()> {
         .args(&export_flags)
         .arg("-Icrates/language/wasm/include")
         .arg("lib/src/wasm-stdlib/libc.c")
-        .arg("lib/src/wasm-stdlib/stdio.c")
         .arg("lib/src/wasm-stdlib/external_scanner_allocator.c")
         .output()?;
 

@@ -67,7 +67,6 @@ pub fn compile_language_to_wasm(
         "__memory_base",
         "__stack_pointer",
         "__table_base",
-        "__table_base",
         "memory",
     ];
     let builtin_symbols = [

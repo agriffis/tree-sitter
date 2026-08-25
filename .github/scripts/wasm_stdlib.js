@@ -17,8 +17,7 @@ module.exports = async ({ github, context, core }) => {
   const wasmStdLibSources = [
     'lib/src/wasm-stdlib/external_scanner_allocator.c',
     'lib/src/wasm-stdlib/imports.txt',
-    'lib/src/wasm-stdlib/libc.c',
-    'lib/src/wasm-stdlib/stdio.c'
+    'lib/src/wasm-stdlib/libc.c'
   ];
   const dirChanged = changedFiles.some(file =>
     wasmStdLibSources.includes(file) ||

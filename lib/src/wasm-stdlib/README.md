@@ -9,18 +9,16 @@ subset:
 
 - `libc/` contains sources vendored from the `wasi-libc` revision used by the
   repository's pinned WASI SDK.
-- `stdio.c` is Tree-sitter's scanner-oriented stdio implementation. It provides
-  in-memory formatting and intentionally implements stream operations as
-  no-ops.
 - `external_scanner_allocator.c` is the resettable allocator used for isolated
   Wasm language modules.
 - `external_scanner_stdlib.h` is a generated Wasm module containing the
-  vendored libc subset, `stdio.c`, and the resettable allocator.
+  libc functions listed in `imports.txt` and the resettable allocator.
 
 When the Tree-sitter Rust library is compiled for `wasm32-unknown-unknown`, the
-same vendored libc sources and `stdio.c` are linked directly into the
-application. In that environment, allocation is instead provided by Rust's
-application-selected global allocator.
+same vendored libc sources are linked directly into the application. `stdio.c`
+provides the additional internal functions needed by the Tree-sitter core;
+these functions are not part of the external-scanner API. Allocation is
+provided by Rust's application-selected global allocator.
 
 To refresh the vendored sources and regenerate the embedded module, run:
 

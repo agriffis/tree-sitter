@@ -18,13 +18,6 @@
 #undef WS
 
 #include "./libc/string/memset.c"
-#include "./libc/string/strchrnul.c"
-#undef ALIGN
-#undef HASZERO
-#undef HIGHS
-#undef ONES
-
-#include "./libc/string/strchr.c"
 #include "./libc/string/strcmp.c"
 #include "./libc/string/strlen.c"
 #undef ALIGN

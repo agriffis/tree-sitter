@@ -28,8 +28,6 @@ TS_WASM_EXPORT("memmove") void *memmove(void *dst, const void *src, size_t count
 
 TS_WASM_EXPORT("memset") void *memset(void *dst, int value, size_t count);
 
-TS_WASM_EXPORT("strchr") char *strchr(const char *str, int c);
-
 TS_WASM_EXPORT("strcmp") int strcmp(const char *left, const char *right);
 
 TS_WASM_EXPORT("strlen") size_t strlen(const char *str);
@@ -39,8 +37,6 @@ TS_WASM_EXPORT("strncat") char *strncat(char *restrict dest, const char *restric
 TS_WASM_EXPORT("strncmp") int strncmp(const char *left, const char *right, size_t n);
 
 char *__stpncpy(char *restrict dest, const char *restrict src, size_t count);
-
-char *__strchrnul(const char *str, int c);
 
 char *stpncpy(char *restrict dest, const char *restrict src, size_t count);
 
