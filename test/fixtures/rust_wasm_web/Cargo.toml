@@ -7,7 +7,7 @@ publish = false
 
 [lib]
 path = "src/rust_wasm_web.rs"
-crate-type = ["cdylib"]
+crate-type = [ "cdylib" ]
 
 [dependencies]
 tree-sitter = { path = "../../../lib" }
