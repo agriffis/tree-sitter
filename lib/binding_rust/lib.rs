@@ -401,7 +401,7 @@ pub struct QueryPredicate {
 /// A match of a [`Query`] to a particular set of [`Node`]s.
 pub struct QueryMatch<'cursor, 'tree> {
     pub pattern_index: usize,
-    pub captures: &'cursor [QueryCapture<'tree>],
+    captures: &'cursor [QueryCapture<'tree>],
     id: u32,
     cursor: *mut ffi::TSQueryCursor,
 }
@@ -620,24 +620,37 @@ impl Language {
         }
     }
 
+    /// Check whether `id` can be used to index this language's symbol tables.
+    ///
+    /// `ts_symbol_metadata` holds one entry per grammar symbol plus one per alias,
+    /// so [`Self::node_kind_count`] is an exact bound. `ERROR` and `_ERROR` sit
+    /// at the top of the `u16` range and are handled by the C library before any
+    /// table lookup.
+    fn node_kind_id_is_valid(&self, id: u16) -> bool {
+        (id as usize) < self.node_kind_count() || id >= u16::MAX - 1
+    }
+
     /// Check if the node type for the given numerical id is named (as opposed
     /// to an anonymous node type).
     #[must_use]
     pub fn node_kind_is_named(&self, id: u16) -> bool {
-        unsafe { ffi::ts_language_symbol_type(self.0, id) == ffi::TSSymbolTypeRegular }
+        self.node_kind_id_is_valid(id)
+            && unsafe { ffi::ts_language_symbol_type(self.0, id) == ffi::TSSymbolTypeRegular }
     }
 
     /// Check if the node type for the given numerical id is visible (as opposed
     /// to a hidden node type).
     #[must_use]
     pub fn node_kind_is_visible(&self, id: u16) -> bool {
-        unsafe { ffi::ts_language_symbol_type(self.0, id) <= ffi::TSSymbolTypeAnonymous }
+        self.node_kind_id_is_valid(id)
+            && unsafe { ffi::ts_language_symbol_type(self.0, id) <= ffi::TSSymbolTypeAnonymous }
     }
 
     /// Check if the node type for the given numerical id is a supertype.
     #[must_use]
     pub fn node_kind_is_supertype(&self, id: u16) -> bool {
-        unsafe { ffi::ts_language_symbol_type(self.0, id) == ffi::TSSymbolTypeSupertype }
+        self.node_kind_id_is_valid(id)
+            && unsafe { ffi::ts_language_symbol_type(self.0, id) == ffi::TSSymbolTypeSupertype }
     }
 
     /// Get the number of distinct field names in this language.
@@ -1653,9 +1666,9 @@ impl<'tree> Node<'tree> {
     #[doc(alias = "ts_node_type")]
     #[must_use]
     pub fn kind(&self) -> &'tree str {
-        unsafe { CStr::from_ptr(ffi::ts_node_type(self.0)) }
-            .to_str()
-            .unwrap()
+        let ptr = unsafe { ffi::ts_node_type(self.0) };
+        assert!(!ptr.is_null());
+        unsafe { CStr::from_ptr(ptr) }.to_str().unwrap()
     }
 
     /// Get this node's symbol name as it appears in the grammar ignoring
@@ -1663,9 +1676,9 @@ impl<'tree> Node<'tree> {
     #[doc(alias = "ts_node_grammar_type")]
     #[must_use]
     pub fn grammar_name(&self) -> &'tree str {
-        unsafe { CStr::from_ptr(ffi::ts_node_grammar_type(self.0)) }
-            .to_str()
-            .unwrap()
+        let ptr = unsafe { ffi::ts_node_grammar_type(self.0) };
+        assert!(!ptr.is_null());
+        unsafe { CStr::from_ptr(ptr) }.to_str().unwrap()
     }
 
     /// Get the [`Language`] that was used to parse this node's syntax tree.
@@ -3432,6 +3445,11 @@ impl<'tree> QueryMatch<'_, 'tree> {
     #[must_use]
     pub const fn id(&self) -> u32 {
         self.id
+    }
+
+    #[must_use]
+    pub const fn captures(&self) -> &[QueryCapture<'tree>] {
+        self.captures
     }
 
     #[doc(alias = "ts_query_cursor_remove_match")]
