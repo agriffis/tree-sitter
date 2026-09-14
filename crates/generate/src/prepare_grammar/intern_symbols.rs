@@ -5,7 +5,7 @@ use thiserror::Error;
 use crate::{
     Diagnostic,
     grammars::{InputGrammar, VariableType},
-    rules::{Rule, RuleId, RulePool, Symbol},
+    rules::{Rule, RuleId, RulePool, Symbol, SymbolView},
     strpool::StrId,
 };
 
@@ -16,13 +16,13 @@ pub enum InternSymbolsError {
     #[error("A grammar's start rule must be visible.")]
     HiddenStartRule,
     #[error("Undefined symbol `{0}`")]
-    Undefined(String),
+    Undefined(Box<str>),
     #[error("Undefined symbol `{0}` in grammar's supertypes array")]
-    UndefinedSupertype(String),
+    UndefinedSupertype(Box<str>),
     #[error("Undefined symbol `{0}` in grammar's conflicts array")]
-    UndefinedConflict(String),
+    UndefinedConflict(Box<str>),
     #[error("Undefined symbol `{0}` as grammar's word token")]
-    UndefinedWordToken(String),
+    UndefinedWordToken(Box<str>),
 }
 
 /// The non-pool outputs of the intern pass. The rule bodies are rewritten in place
@@ -110,8 +110,9 @@ pub(super) fn intern_symbols(
         .supertype_names
         .iter()
         .map(|&s| {
-            lookup(s)
-                .ok_or_else(|| InternSymbolsError::UndefinedSupertype(pool.resolve(s).to_string()))
+            lookup(s).ok_or_else(|| {
+                InternSymbolsError::UndefinedSupertype(pool.resolve(s).to_string().into())
+            })
         })
         .collect::<InternSymbolsResult<Vec<_>>>()?;
     let conflicts = grammar
@@ -121,7 +122,7 @@ pub(super) fn intern_symbols(
             c.iter()
                 .map(|&s| {
                     lookup(s).ok_or_else(|| {
-                        InternSymbolsError::UndefinedConflict(pool.resolve(s).to_string())
+                        InternSymbolsError::UndefinedConflict(pool.resolve(s).to_string().into())
                     })
                 })
                 .collect::<InternSymbolsResult<Vec<_>>>()
@@ -144,7 +145,7 @@ pub(super) fn intern_symbols(
         .filter_map(|(&name, symbol)| {
             if inline.contains(&symbol) {
                 diagnostics.push(Diagnostic::SupertypeInlined {
-                    name: pool.resolve(name).to_string(),
+                    name: pool.resolve(name).into(),
                 });
                 None
             } else {
@@ -155,14 +156,15 @@ pub(super) fn intern_symbols(
     let word = grammar
         .word_name
         .map(|s| {
-            lookup(s)
-                .ok_or_else(|| InternSymbolsError::UndefinedWordToken(pool.resolve(s).to_string()))
+            lookup(s).ok_or_else(|| {
+                InternSymbolsError::UndefinedWordToken(pool.resolve(s).to_string().into())
+            })
         })
         .transpose()?;
 
     for s in &supertypes {
-        if s.is_non_terminal() {
-            kinds[s.index as usize] = VariableType::Hidden;
+        if let SymbolView::NonTerminal(index) = s.view() {
+            kinds[usize::from(index)] = VariableType::Hidden;
         }
     }
 
@@ -191,14 +193,8 @@ fn intern_root(
     while let Some(id) = stack.pop() {
         match pool.node(id) {
             Rule::NamedSymbol(sid) => match name_of_symbol.get(&sid).copied() {
-                Some(s) => pool.set_node(
-                    id,
-                    Rule::Sym {
-                        kind: s.kind,
-                        index: s.index,
-                    },
-                ),
-                None => Err(InternSymbolsError::Undefined(pool.resolve(sid).to_string()))?,
+                Some(s) => pool.set_node(id, Rule::from(s)),
+                None => Err(InternSymbolsError::Undefined(pool.resolve(sid).into()))?,
             },
             Rule::Seq(range) | Rule::Choice(range) => {
                 let children = pool.child_slice(range);
@@ -207,7 +203,7 @@ fn intern_root(
                 if children.len() == 1
                     && matches!(pool.node(children[0]), Rule::String(_) | Rule::Pattern(..))
                 {
-                    let name = var_name.map(|s| pool.resolve(s).to_string());
+                    let name = var_name.map(|s| pool.resolve(s).into());
                     diagnostics.push(if matches!(pool.node(id), Rule::Choice(_)) {
                         Diagnostic::UnaryChoice { name }
                     } else {
@@ -238,7 +234,7 @@ fn variable_type_for_name(name: &str) -> VariableType {
 
 #[cfg(test)]
 mod tests {
-    use crate::{grammars::Variable, rules::SymbolType};
+    use crate::grammars::Variable;
 
     use super::*;
 
@@ -404,7 +400,7 @@ mod tests {
         assert!(result.is_err(), "Expected an error but got none");
         assert_eq!(
             result.unwrap_err(),
-            InternSymbolsError::Undefined("y".to_string())
+            InternSymbolsError::Undefined("y".to_string().into())
         );
     }
 
@@ -447,9 +443,7 @@ mod tests {
         assert_eq!(meta.inline, vec![Symbol::non_terminal(1)]);
         assert_eq!(
             diagnostics,
-            [Diagnostic::SupertypeInlined {
-                name: "_v2".to_string()
-            }]
+            [Diagnostic::SupertypeInlined { name: "_v2".into() }]
         );
     }
 
@@ -511,16 +505,10 @@ mod tests {
     }
 
     fn nt(index: u32) -> Rule {
-        Rule::Sym {
-            kind: SymbolType::NonTerminal,
-            index,
-        }
+        Rule::from(Symbol::non_terminal(index as usize))
     }
 
     fn ext(index: u32) -> Rule {
-        Rule::Sym {
-            kind: SymbolType::External,
-            index,
-        }
+        Rule::from(Symbol::external(index as usize))
     }
 }

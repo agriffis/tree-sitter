@@ -7,9 +7,7 @@ use crate::{
         InputGrammar, Production, ProductionStep, ProductionStore, SyntaxGrammar, SyntaxVariable,
     },
     prepare_grammar::extract_tokens::ExtractedGrammarMeta,
-    rules::{
-        Alias, Associativity, Precedence, Rule, RuleId, RulePool, Symbol, SymbolType, TokenSet,
-    },
+    rules::{Alias, Associativity, Precedence, Rule, RuleId, RulePool, Symbol, TokenSet},
     strpool::{StrId, StrPool},
 };
 
@@ -18,7 +16,7 @@ pub type FlattenGrammarResult<T> = Result<T, FlattenGrammarError>;
 #[derive(Debug, Error, Serialize, Deserialize, PartialEq, Eq)]
 pub enum FlattenGrammarError {
     #[error("No such reserved word set: {0}")]
-    NoReservedWordSet(String),
+    NoReservedWordSet(Box<str>),
     #[error("Reserved word set count {0} exceeds the maximum of {max}", max = u16::MAX)]
     TooManyReservedWordSets(usize),
     #[error(
@@ -28,11 +26,11 @@ Tree-sitter does not support syntactic rules that match the empty string
 unless they are used only as the grammar's start rule.
 "
     )]
-    EmptyString(String),
+    EmptyString(Box<str>),
     #[error("Rule `{0}` cannot be inlined because it contains a reference to itself")]
-    RecursiveInline(String),
+    RecursiveInline(Box<str>),
     #[error("Rule `{0}` has no reachable productions.")]
-    NoReachableProductions(String),
+    NoReachableProductions(Box<str>),
 }
 
 #[derive(Clone, Copy, Default)]
@@ -116,9 +114,9 @@ impl FlattenState {
         self.choices.begin_path();
     }
 
-    fn push_step(&mut self, kind: SymbolType, index: u32, ctx: FlattenCtx) {
+    fn push_step(&mut self, symbol: Symbol, ctx: FlattenCtx) {
         self.steps.push(ProductionStep::pack(
-            Symbol { kind, index },
+            symbol,
             ctx.prec,
             ctx.assoc,
             ctx.alias,
@@ -149,8 +147,8 @@ fn apply(
     st: &mut FlattenState,
 ) -> FlattenGrammarResult<bool> {
     match pool.node(node) {
-        Rule::Sym { kind, index } => {
-            st.push_step(kind, index, f_ctx);
+        Rule::Sym(symbol) => {
+            st.push_step(symbol, f_ctx);
             Ok(true)
         }
         Rule::Seq(range) => {
@@ -182,8 +180,7 @@ fn apply(
             apply(pool, reserved_ids, child, f_ctx, at_end, st)
         }
         Rule::Eof => {
-            let symbol = Symbol::end();
-            st.push_step(symbol.kind, symbol.index, f_ctx);
+            st.push_step(Symbol::End, f_ctx);
             Ok(true)
         }
         Rule::Metadata { params, rule } => {
@@ -223,7 +220,7 @@ fn apply(
         Rule::Reserved { rule, ctx } => {
             let Some(&reserved) = reserved_ids.get(&ctx) else {
                 return Err(FlattenGrammarError::NoReservedWordSet(
-                    pool.resolve(ctx).to_string(),
+                    pool.resolve(ctx).to_string().into(),
                 ));
             };
             let inner = FlattenCtx { reserved, ..f_ctx };
@@ -241,7 +238,7 @@ fn emit(st: &mut FlattenState, out: &mut ProductionStore, prod_start: u32) -> bo
     let Some(eof_index) = st
         .steps
         .iter()
-        .position(|step| step.symbol() == Symbol::end())
+        .position(|step| step.symbol() == Symbol::End)
     else {
         return emit_ready(st, out, prod_start, false);
     };
@@ -318,7 +315,7 @@ pub(super) fn flatten_grammar(
         }
         if dropped_for_eof && prod_start == out.productions.len() as u32 {
             return Err(FlattenGrammarError::NoReachableProductions(
-                g.pool.resolve(v.name).to_string(),
+                g.pool.resolve(v.name).to_string().into(),
             ));
         }
         out.var_prods
@@ -340,7 +337,7 @@ fn check(
         for p in &out.productions[p_start as usize..p_end as usize] {
             if used && p.steps_len == 0 && !p.requires_eof_lookahead {
                 Err(FlattenGrammarError::EmptyString(
-                    g.pool.resolve(g.variables[i].name).to_string(),
+                    g.pool.resolve(g.variables[i].name).to_string().into(),
                 ))?;
             }
             if inlined
@@ -349,7 +346,7 @@ fn check(
                     .any(|s| s.symbol() == symbol)
             {
                 Err(FlattenGrammarError::RecursiveInline(
-                    g.pool.resolve(g.variables[i].name).to_string(),
+                    g.pool.resolve(g.variables[i].name).to_string().into(),
                 ))?;
             }
         }
@@ -651,7 +648,7 @@ mod tests {
         };
         assert_eq!(
             run(pg, meta).unwrap_err(),
-            FlattenGrammarError::RecursiveInline("test".to_string())
+            FlattenGrammarError::RecursiveInline("test".to_string().into())
         );
     }
 
@@ -666,7 +663,7 @@ mod tests {
         .unwrap_err();
         assert_eq!(
             err,
-            FlattenGrammarError::NoReservedWordSet("nope".to_string())
+            FlattenGrammarError::NoReservedWordSet("nope".to_string().into())
         );
     }
 
@@ -697,7 +694,7 @@ mod tests {
         };
         assert_eq!(
             run(pg, meta).unwrap_err(),
-            FlattenGrammarError::EmptyString("b".to_string())
+            FlattenGrammarError::EmptyString("b".to_string().into())
         );
     }
 
@@ -728,16 +725,10 @@ mod tests {
     }
 
     fn term(p: &mut RulePool, i: u32) -> RuleId {
-        p.push_node(Rule::Sym {
-            kind: SymbolType::Terminal,
-            index: i,
-        })
+        p.push_node(Rule::from(Symbol::terminal(i as usize)))
     }
     fn non_term(p: &mut RulePool, i: u32) -> RuleId {
-        p.push_node(Rule::Sym {
-            kind: SymbolType::NonTerminal,
-            index: i,
-        })
+        p.push_node(Rule::from(Symbol::non_terminal(i as usize)))
     }
 
     #[derive(Debug, PartialEq)]

@@ -12,7 +12,8 @@ use crate::{
     dedup::split_state_id_groups,
     grammars::{LexicalGrammar, SyntaxGrammar},
     nfa::{CharacterSet, NfaCursor},
-    rules::{Symbol, TokenSet},
+    rules::{Symbol, SymbolView, TokenSet},
+    strpool::StrPool,
     tables::{AdvanceAction, LexState, LexStateId, LexTable, ParseStateId, ParseTable},
 };
 
@@ -31,10 +32,11 @@ pub fn build_lex_table(
     keywords: &TokenSet,
     coincident_token_index: &CoincidentTokenIndex,
     token_conflict_map: &TokenConflictMap,
+    str_pool: &StrPool,
 ) -> LexTables {
     let keyword_lex_table = if syntax_grammar.word_token.is_some() {
         let mut builder = LexTableBuilder::new(lexical_grammar);
-        builder.add_state_for_tokens(keywords);
+        builder.add_state_for_tokens(keywords, str_pool);
         builder.table
     } else {
         LexTable::default()
@@ -47,18 +49,18 @@ pub fn build_lex_table(
             .keys()
             .copied()
             .chain(state.reserved_words.iter())
-            .filter_map(|token| {
-                if token.is_terminal() {
+            .filter_map(|token| match token.view() {
+                SymbolView::Terminal(_) => {
                     if keywords.contains(token) {
                         syntax_grammar.word_token
                     } else {
                         Some(token)
                     }
-                } else if token.is_eof() {
-                    Some(token)
-                } else {
-                    None
                 }
+                SymbolView::End => Some(token),
+                SymbolView::External(_)
+                | SymbolView::EndOfNonTerminalExtra
+                | SymbolView::NonTerminal(_) => None,
             })
             .collect();
 
@@ -83,7 +85,7 @@ pub fn build_lex_table(
 
     let mut builder = LexTableBuilder::new(lexical_grammar);
     for (tokens, parse_state_ids) in parse_state_ids_by_token_set {
-        let lex_state_id = builder.add_state_for_tokens(&tokens);
+        let lex_state_id = builder.add_state_for_tokens(&tokens, str_pool);
         for id in parse_state_ids {
             parse_table.states[id as usize].lex_state_id = lex_state_id;
         }
@@ -97,7 +99,7 @@ pub fn build_lex_table(
     for (variable_ix, _variable) in lexical_grammar.variables.iter().enumerate() {
         let symbol = Symbol::terminal(variable_ix);
         builder.reset();
-        builder.add_state_for_tokens(&TokenSet::from_iter([symbol]));
+        builder.add_state_for_tokens(&TokenSet::from_iter([symbol]), str_pool);
         for state in &builder.table.states {
             let mut characters = CharacterSet::empty();
             for (chars, action) in &state.advance_actions {
@@ -161,16 +163,22 @@ impl<'a> LexTableBuilder<'a> {
         self.state_ids_by_nfa_state_set.clear();
     }
 
-    fn add_state_for_tokens(&mut self, tokens: &TokenSet) -> LexStateId {
+    fn add_state_for_tokens(&mut self, tokens: &TokenSet, str_pool: &StrPool) -> LexStateId {
         let mut eof_valid = false;
         let nfa_states = tokens
             .iter()
-            .filter_map(|token| {
-                if token.is_terminal() {
-                    Some(self.lexical_grammar.variables[token.index as usize].start_state)
-                } else {
+            .filter_map(|token| match token.view() {
+                SymbolView::Terminal(index) => {
+                    Some(self.lexical_grammar.variables[usize::from(index)].start_state)
+                }
+                SymbolView::End => {
                     eof_valid = true;
                     None
+                }
+                SymbolView::External(_)
+                | SymbolView::EndOfNonTerminalExtra
+                | SymbolView::NonTerminal(_) => {
+                    unreachable!()
                 }
             })
             .collect();
@@ -181,7 +189,14 @@ impl<'a> LexTableBuilder<'a> {
                 "entry point state: {state_id}, tokens: {:?}",
                 tokens
                     .iter()
-                    .map(|t| &self.lexical_grammar.variables[t.index as usize].name)
+                    .map(|t| match t.view() {
+                        SymbolView::Terminal(index) => str_pool
+                            .resolve(self.lexical_grammar.variables[usize::from(index)].name),
+                        SymbolView::End => "<EOF>",
+                        SymbolView::External(_)
+                        | SymbolView::EndOfNonTerminalExtra
+                        | SymbolView::NonTerminal(_) => unreachable!(),
+                    })
                     .collect::<Vec<_>>()
             );
         }
@@ -276,7 +291,7 @@ impl<'a> LexTableBuilder<'a> {
             self.table.states[state_id as usize].accept_action =
                 Some(Symbol::terminal(complete_id));
         } else if self.cursor.state_ids.is_empty() {
-            self.table.states[state_id as usize].accept_action = Some(Symbol::end());
+            self.table.states[state_id as usize].accept_action = Some(Symbol::End);
         }
     }
 }
@@ -319,14 +334,10 @@ fn merge_token_set(
 ) -> bool {
     if tokens
         .terminals()
-        .filter(|terminal| !other.contains_terminal(terminal.index as usize))
-        .any(|terminal| {
-            check_token_conflicts(
-                terminal.index as usize,
-                other,
-                token_conflict_map,
-                coincident_token_index,
-            )
+        .map(usize::from)
+        .filter(|&index| !other.contains_terminal(index))
+        .any(|index| {
+            check_token_conflicts(index, other, token_conflict_map, coincident_token_index)
         })
     {
         return false;
@@ -334,14 +345,10 @@ fn merge_token_set(
 
     if other
         .terminals()
-        .filter(|terminal| !tokens.contains_terminal(terminal.index as usize))
-        .any(|terminal| {
-            check_token_conflicts(
-                terminal.index as usize,
-                tokens,
-                token_conflict_map,
-                coincident_token_index,
-            )
+        .map(usize::from)
+        .filter(|&index| !tokens.contains_terminal(index))
+        .any(|index| {
+            check_token_conflicts(index, tokens, token_conflict_map, coincident_token_index)
         })
     {
         return false;

@@ -5,7 +5,7 @@ use thiserror::Error;
 use crate::{
     grammars::{InputGrammar, Variable, VariableType},
     prepare_grammar::extract_tokens::ExtractedGrammarMeta,
-    rules::{Rule, RuleId, RulePool, Symbol, SymbolType},
+    rules::{Rule, RuleId, RulePool, Symbol, SymbolView},
     strpool::{StrId, StrPool},
 };
 
@@ -26,7 +26,7 @@ enum Task {
 
 #[derive(Debug, Error, Serialize, Deserialize, PartialEq, Eq)]
 #[error("Rule `{0}` contains a repetition that can match the empty string at end of input")]
-pub struct ExpandRepeatsError(pub String);
+pub struct ExpandRepeatsError(pub Box<str>);
 
 impl Expander {
     /// Post-order repeat expansion over one root. Children expand first, and `Reserved`
@@ -62,7 +62,9 @@ impl Expander {
                 Task::Expand { id, content } => {
                     let width = self.zero_width.eval(pool, content);
                     if width.eof_nullable {
-                        return Err(ExpandRepeatsError(pool.resolve(var_name).to_string()));
+                        return Err(ExpandRepeatsError(
+                            pool.resolve(var_name).to_string().into(),
+                        ));
                     }
                     // For repetitions, introduce an auxiliary rule that contains the
                     // repeated content, but can also contain a recursive binary tree structure.
@@ -193,15 +195,15 @@ impl ZeroWidth {
                         nullable: false,
                         eof_nullable: true,
                     }),
-                    Rule::Sym { kind, index } => {
-                        let width = match kind {
-                            SymbolType::End => Width {
+                    Rule::Sym(symbol) => {
+                        let width = match symbol.view() {
+                            SymbolView::End => Width {
                                 nullable: false,
                                 eof_nullable: true,
                             },
-                            SymbolType::NonTerminal => self
+                            SymbolView::NonTerminal(index) => self
                                 .by_variable
-                                .get(index as usize)
+                                .get(usize::from(index))
                                 .copied()
                                 .unwrap_or_default(),
                             // External scanners decide at runtime how far to advance
@@ -211,15 +213,15 @@ impl ZeroWidth {
                             // A scanner may gate itself on `lexer->eof`, but there's
                             // no way to determine that here. Assuming so would reject
                             // every grammar that `repeat`s an external.
-                            SymbolType::External => Width {
+                            SymbolView::External(_) => Width {
                                 nullable: true,
                                 eof_nullable: false,
                             },
                             // `expand_tokens` rejects tokens that match the empty string
-                            SymbolType::Terminal => Width::default(),
+                            SymbolView::Terminal(_) => Width::default(),
                             // Lookahead marker that `build_parse_table` inserts for nonterminal
                             // extras _after_ this pass runs.
-                            SymbolType::EndOfNonTerminalExtra => unreachable!(),
+                            SymbolView::EndOfNonTerminalExtra => unreachable!(),
                         };
                         self.values.push(width);
                     }
@@ -324,7 +326,9 @@ pub(super) fn expand_repeats(
                 .eval(&grammar.pool, content)
                 .eof_nullable
             {
-                return Err(ExpandRepeatsError(grammar.pool.resolve(name).to_string()));
+                return Err(ExpandRepeatsError(
+                    grammar.pool.resolve(name).to_string().into(),
+                ));
             }
             expander.expand_root(&mut grammar.pool, content, name, &mut aux_repeat_count)?;
             grammar.variables[i].root =
@@ -345,8 +349,6 @@ pub(super) fn expand_repeats(
 
 #[cfg(test)]
 mod tests {
-    use crate::rules::SymbolType;
-
     use super::*;
 
     #[test]
@@ -615,10 +617,7 @@ mod tests {
         // rule0: non_terminal(1) (unchanged)
         assert_eq!(
             g.pool.node(g.variables[0].root),
-            Rule::Sym {
-                kind: SymbolType::NonTerminal,
-                index: 1
-            }
+            Rule::from(Symbol::non_terminal(1))
         );
 
         // _rule1: choice(seq(nt1, nt1), terminal(11), terminal(12)) (inner choice flattened)
@@ -658,21 +657,15 @@ mod tests {
         };
         assert_eq!(
             expand_repeats(&mut grammar, &mut meta).unwrap_err(),
-            ExpandRepeatsError("rule0".to_string())
+            ExpandRepeatsError("rule0".to_string().into())
         );
     }
 
     fn term(p: &mut RulePool, i: u32) -> RuleId {
-        p.push_node(Rule::Sym {
-            kind: SymbolType::Terminal,
-            index: i,
-        })
+        p.push_node(Rule::from(Symbol::terminal(i as usize)))
     }
     fn non_term(p: &mut RulePool, i: u32) -> RuleId {
-        p.push_node(Rule::Sym {
-            kind: SymbolType::NonTerminal,
-            index: i,
-        })
+        p.push_node(Rule::from(Symbol::non_terminal(i as usize)))
     }
 
     fn expand(

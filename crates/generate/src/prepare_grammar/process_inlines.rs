@@ -10,7 +10,7 @@ use crate::{
         ProductionStore,
     },
     prepare_grammar::extract_tokens::ExtractedGrammarMeta,
-    rules::{Precedence, Symbol, SymbolType},
+    rules::{Precedence, Symbol, SymbolView},
 };
 
 struct InlineBuilder<'a> {
@@ -88,7 +88,10 @@ impl InlineBuilder<'_> {
 
             let removed_prod = std::mem::take(&mut scratch[i]);
             let removed_step = removed_prod.steps[si];
-            let (v_start, v_end) = self.out.var_prods[symbol.index as usize];
+            let SymbolView::NonTerminal(index) = symbol.view() else {
+                unreachable!();
+            };
+            let (v_start, v_end) = self.out.var_prods[usize::from(index)];
             let replacements = (v_start..v_end)
                 .filter_map(|p_idx| {
                     let p = self.out.productions[p_idx as usize];
@@ -171,13 +174,13 @@ pub type ProcessInlinesResult<T> = Result<T, ProcessInlinesError>;
 #[derive(Debug, Error, Serialize, Deserialize, PartialEq, Eq)]
 pub enum ProcessInlinesError {
     #[error("External token `{0}` cannot be inlined")]
-    ExternalToken(String),
+    ExternalToken(Box<str>),
     #[error("Token `{0}` cannot be inlined")]
-    Token(String),
+    Token(Box<str>),
     #[error("Rule `{0}` cannot be inlined because it is the first rule")]
-    FirstRule(String),
+    FirstRule(Box<str>),
     #[error("Rule `{0}` has no reachable productions after inlining")]
-    NoReachableProductions(String),
+    NoReachableProductions(Box<str>),
 }
 
 pub(super) fn process_inlines(
@@ -190,21 +193,22 @@ pub(super) fn process_inlines(
         return Ok(InlinedProductionMap::default());
     }
     for symbol in &meta.inline {
-        match symbol.kind {
-            SymbolType::External => Err(ProcessInlinesError::ExternalToken(
+        match symbol.view() {
+            SymbolView::External(index) => Err(ProcessInlinesError::ExternalToken(
                 g.pool
-                    .resolve(meta.external_tokens[symbol.index as usize].name)
-                    .to_string(),
+                    .resolve(meta.external_tokens[usize::from(index)].name)
+                    .into(),
             ))?,
-            SymbolType::Terminal => Err(ProcessInlinesError::Token(
+            SymbolView::Terminal(index) => Err(ProcessInlinesError::Token(
                 g.pool
-                    .resolve(lexical_variables[symbol.index as usize].name)
-                    .to_string(),
+                    .resolve(lexical_variables[usize::from(index)].name)
+                    .into(),
             ))?,
-            SymbolType::NonTerminal if symbol.index == 0 => Err(ProcessInlinesError::FirstRule(
-                g.pool.resolve(g.variables[0].name).to_string(),
-            ))?,
-            _ => {}
+            SymbolView::NonTerminal(index) if u32::from(index) == 0 => Err(
+                ProcessInlinesError::FirstRule(g.pool.resolve(g.variables[0].name).into()),
+            )?,
+            SymbolView::NonTerminal(_) => {}
+            SymbolView::End | SymbolView::EndOfNonTerminalExtra => unreachable!(),
         }
     }
 
@@ -225,7 +229,7 @@ pub(super) fn process_inlines(
             let symbol = Symbol::non_terminal(i);
             if i == 0 || out.steps.iter().any(|s| s.symbol() == symbol) {
                 Err(ProcessInlinesError::NoReachableProductions(
-                    g.pool.resolve(g.variables[i].name).to_string(),
+                    g.pool.resolve(g.variables[i].name).to_string().into(),
                 ))?;
             }
         }
@@ -546,7 +550,10 @@ mod tests {
         let result = process_inlines(&g, &meta, &lexical_variables, &mut out);
         assert!(result.is_err());
         let err = result.unwrap_err();
-        assert_eq!(err, ProcessInlinesError::Token("something".to_string()));
+        assert_eq!(
+            err,
+            ProcessInlinesError::Token("something".to_string().into())
+        );
     }
 
     fn make_lexical_variables_through(
@@ -646,7 +653,7 @@ mod tests {
         };
         assert_eq!(
             process_inlines(&g, &meta, &lexical_variables, &mut out).unwrap_err(),
-            ProcessInlinesError::NoReachableProductions("rule1".to_string())
+            ProcessInlinesError::NoReachableProductions("rule1".to_string().into())
         );
     }
 
