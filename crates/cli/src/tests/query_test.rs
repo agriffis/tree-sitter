@@ -6714,6 +6714,105 @@ export default grammar({
 }
 
 #[test]
+fn test_query_negated_field_through_hidden_nodes() {
+    let language = get_test_fixture_language("field_lookup_through_hidden_nodes");
+
+    // `spread` is a field of the second list, through the supertype `item`, no
+    // node of the `shadow` is `outer`, since its only name is `inner`, and of the
+    // `maybe`s only the one with a name has an `outer`.
+    let source = indoc! {"
+        [a]
+        [a, ...b]
+        let a = b;
+        shadow a;
+        alias ...a;
+        pair ...a, b;
+        pair ...a, ...b;
+        let a // c
+        = b;
+        multi a a = b;
+        restore a;
+        back a b;
+        maybe none end;
+        maybe a end;
+        sum a + b + c;
+    "};
+    let query = Query::new(
+        &language,
+        r"
+        (list !spread) @list
+        (binding !outer) @binding
+        (shadow !outer) @shadow
+        (aliased !spread) @aliased
+        (alias_pair !spread) @pair
+        (multi !outer) @multi
+        (restored !outer) @restored
+        (back !outer) @back
+        (maybe !outer) @maybe
+        (sum !left) @sum
+        ",
+    )
+    .unwrap();
+
+    assert_query_matches(
+        &language,
+        &query,
+        source,
+        &[
+            (0, vec![("list", "[a]")]),
+            (2, vec![("shadow", "shadow a;")]),
+            (3, vec![("aliased", "alias ...a;")]),
+            (4, vec![("pair", "pair ...a, b;")]),
+            (8, vec![("maybe", "maybe none end;")]),
+        ],
+    );
+}
+
+#[test]
+fn test_query_field_on_hidden_rule_reaches_later_siblings() {
+    let language = get_test_fixture_language("field_on_hidden_rule");
+
+    // `outer` reaches the `=` and `b` through the hidden `_binding`, and `left`
+    // reaches `a`, the first `+`, and `b` through the nested hidden `_sum`s.
+    let source = "let a = b;\nsum a + b + c;\n";
+
+    let query = Query::new(
+        &language,
+        r#"
+        (binding outer: (name) @outer_name)
+        (binding outer: _ @outer_node)
+        (sum left: "+" @left_operator)
+        (sum left: (name) @left_name)
+        "#,
+    )
+    .unwrap();
+
+    assert_query_matches(
+        &language,
+        &query,
+        source,
+        &[
+            (1, vec![("outer_node", "=")]),
+            (0, vec![("outer_name", "b")]),
+            (1, vec![("outer_node", "b")]),
+            (3, vec![("left_name", "a")]),
+            (2, vec![("left_operator", "+")]),
+            (3, vec![("left_name", "b")]),
+        ],
+    );
+
+    // `arg` reaches the `(` through the hidden `_call`, and `a` has an `arg` of
+    // its own.
+    let query = Query::new(&language, "(call arg: (name) @arg_name)").unwrap();
+    assert_query_matches(
+        &language,
+        &query,
+        "call (a);\n",
+        &[(0, vec![("arg_name", "a")])],
+    );
+}
+
+#[test]
 fn test_last_child_anchor_looks_past_hidden_repeat() {
     let language = get_test_fixture_language("last_child_anchor_past_hidden_repeat");
 
