@@ -1,7 +1,6 @@
 use std::{cell::Cell, env, fmt::Write, ops::ControlFlow, sync::LazyLock};
 
 use indoc::indoc;
-use rand::{SeedableRng, prelude::StdRng};
 use streaming_iterator::StreamingIterator;
 use tree_sitter::{
     CaptureQuantifier, InputEdit, Language, Node, Parser, Point, Query, QueryCursor,
@@ -9,18 +8,20 @@ use tree_sitter::{
     QueryPredicateArg, QueryProperty, Range,
 };
 use tree_sitter_generate::load_grammar_file;
-use unindent::Unindent;
 
 use super::helpers::{
     allocations,
     fixtures::{get_language, get_test_language},
     query_helpers::{Match, Pattern, assert_query_matches},
 };
-use crate::tests::{
-    ITERATION_COUNT, generate_parser,
-    helpers::{
-        fixtures::get_test_fixture_language,
-        query_helpers::{collect_captures, collect_matches},
+use crate::{
+    fuzz::random::Rand,
+    tests::{
+        ITERATION_COUNT, generate_parser,
+        helpers::{
+            fixtures::get_test_fixture_language,
+            query_helpers::{collect_captures, collect_matches},
+        },
     },
 };
 
@@ -2679,7 +2680,7 @@ fn test_query_matches_within_point_range() {
         let language = get_language("javascript");
         let query = Query::new(&language, "(identifier) @element").unwrap();
 
-        let source = "
+        let source = indoc! {"
             [
               a, b,
               c, d,
@@ -2688,19 +2689,18 @@ fn test_query_matches_within_point_range() {
               i, j,
               k, l,
             ]
-        "
-        .unindent();
+        "};
 
         let mut parser = Parser::new();
         parser.set_language(&language).unwrap();
-        let tree = parser.parse(&source, None).unwrap();
+        let tree = parser.parse(source, None).unwrap();
         let mut cursor = QueryCursor::new();
 
         let matches = cursor
             .set_point_range(Point::new(1, 0)..Point::new(2, 3))
             .matches(&query, tree.root_node(), source.as_bytes());
         assert_eq!(
-            collect_matches(matches, &query, &source),
+            collect_matches(matches, &query, source),
             &[
                 (0, vec![("element", "a")]),
                 (0, vec![("element", "b")]),
@@ -2712,7 +2712,7 @@ fn test_query_matches_within_point_range() {
             .set_point_range(Point::new(2, 0)..Point::new(3, 3))
             .matches(&query, tree.root_node(), source.as_bytes());
         assert_eq!(
-            collect_matches(matches, &query, &source),
+            collect_matches(matches, &query, source),
             &[
                 (0, vec![("element", "c")]),
                 (0, vec![("element", "d")]),
@@ -2725,7 +2725,7 @@ fn test_query_matches_within_point_range() {
             .set_point_range(Point::new(4, 1)..Point::new(0, 0))
             .matches(&query, tree.root_node(), source.as_bytes());
         assert_eq!(
-            collect_matches(matches, &query, &source),
+            collect_matches(matches, &query, source),
             &[
                 (0, vec![("element", "g")]),
                 (0, vec![("element", "h")]),
@@ -3080,7 +3080,7 @@ fn test_query_matches_within_range_of_long_repetition() {
         )
         .unwrap();
 
-        let source = "
+        let source = indoc! {"
             fn zero() {}
             fn one() {}
             fn two() {}
@@ -3094,20 +3094,19 @@ fn test_query_matches_within_range_of_long_repetition() {
             fn ten() {}
             fn eleven() {}
             fn twelve() {}
-        "
-        .unindent();
+        "};
 
         let mut parser = Parser::new();
         let mut cursor = QueryCursor::new();
 
         parser.set_language(&language).unwrap();
-        let tree = parser.parse(&source, None).unwrap();
+        let tree = parser.parse(source, None).unwrap();
 
         let matches = cursor
             .set_point_range(Point::new(8, 0)..Point::new(20, 0))
             .matches(&query, tree.root_node(), source.as_bytes());
         assert_eq!(
-            collect_matches(matches, &query, &source),
+            collect_matches(matches, &query, source),
             &[
                 (0, vec![("fn-name", "eight")]),
                 (0, vec![("fn-name", "nine")]),
@@ -3132,7 +3131,7 @@ fn test_query_matches_contained_within_range() {
         )
         .unwrap();
 
-        let source = r#"
+        let source = indoc! {r#"
             [
                 {"key1": "value1"},
                 {"key2": "value2"},
@@ -3147,12 +3146,11 @@ fn test_query_matches_contained_within_range() {
                 {"key11": "value11"},
                 {"key12": "value12"},
             ]
-        "#
-        .unindent();
+        "#};
 
         let mut parser = Parser::new();
         parser.set_language(&language).unwrap();
-        let tree = parser.parse(&source, None).unwrap();
+        let tree = parser.parse(source, None).unwrap();
 
         let expected_matches = [
             (1, vec![("l_brace", "{"), ("r_brace", "}")]),
@@ -3163,7 +3161,7 @@ fn test_query_matches_contained_within_range() {
             let matches = cursor
                 .set_containing_point_range(Point::new(5, 0)..Point::new(7, 0))
                 .matches(&query, tree.root_node(), source.as_bytes());
-            assert_eq!(collect_matches(matches, &query, &source), &expected_matches);
+            assert_eq!(collect_matches(matches, &query, source), &expected_matches);
         }
         {
             let mut cursor = QueryCursor::new();
@@ -3172,7 +3170,7 @@ fn test_query_matches_contained_within_range() {
                 tree.root_node(),
                 source.as_bytes(),
             );
-            assert_eq!(collect_matches(matches, &query, &source), &expected_matches);
+            assert_eq!(collect_matches(matches, &query, source), &expected_matches);
         }
     });
 }
@@ -4819,8 +4817,7 @@ fn test_query_random() {
         let end_seed = start_seed + *ITERATION_COUNT;
 
         for seed in start_seed..(start_seed + end_seed) {
-            let seed = seed as u64;
-            let mut rand = StdRng::seed_from_u64(seed);
+            let mut rand = Rand::new(seed);
             let (pattern_ast, _) = Pattern::random_pattern_in_tree(&pattern_tree, &mut rand);
             let pattern = pattern_ast.to_string();
             let expected_matches = pattern_ast.matches_in_tree(&test_tree);
