@@ -38,8 +38,6 @@ use tree_sitter_highlight::Highlighter;
 use tree_sitter_loader::{self as loader, Bindings, TreeSitterJSON};
 use tree_sitter_tags::TagsContext;
 
-const BUILD_VERSION: &str = env!("CARGO_PKG_VERSION");
-const BUILD_SHA: Option<&'static str> = option_env!("BUILD_SHA");
 const DEFAULT_GENERATE_ABI_VERSION: usize = 15;
 
 #[derive(Subcommand)]
@@ -1222,7 +1220,7 @@ impl Parse {
                 contents,
                 languages: language_names,
             } => {
-                let path = get_tmp_source_file(&contents)?;
+                let file = get_tmp_source_file(&contents)?;
                 let languages = loader.languages_at_path(current_dir)?;
 
                 let language = if let Some(ref lib_path) = self.lib_path {
@@ -1251,20 +1249,19 @@ impl Parse {
                 parse::parse_file_at_path(
                     &mut parser,
                     language,
-                    &path,
+                    file.path(),
                     &name,
                     name.chars().count(),
                     &mut options,
                 )?;
                 update_stats(&mut stats);
-                fs::remove_file(path)?;
             }
 
             CliInput::Stdin(contents) => {
                 // Place user input and parser output on separate lines
                 println!();
 
-                let path = get_tmp_source_file(&contents)?;
+                let file = get_tmp_source_file(&contents)?;
                 let name = "stdin";
                 let language = loader.select_language(
                     None,
@@ -1276,13 +1273,12 @@ impl Parse {
                 parse::parse_file_at_path(
                     &mut parser,
                     &language,
-                    &path,
+                    file.path(),
                     name,
                     name.chars().count(),
                     &mut options,
                 )?;
                 update_stats(&mut stats);
-                fs::remove_file(path)?;
             }
         }
 
@@ -1624,7 +1620,7 @@ impl Query {
                 contents,
                 languages: language_names,
             } => {
-                let path = get_tmp_source_file(&contents)?;
+                let file = get_tmp_source_file(&contents)?;
                 let languages = loader.languages_at_path(current_dir)?;
                 let language = if let Some(ref lib_path) = self.lib_path {
                     &loader
@@ -1653,14 +1649,13 @@ impl Query {
                     print_time: self.time,
                     stdin: true,
                 };
-                query::query_file_at_path(language, &path, &name, query_path, &opts, None)?;
-                fs::remove_file(path)?;
+                query::query_file_at_path(language, file.path(), &name, query_path, &opts, None)?;
             }
             CliInput::Stdin(contents) => {
                 // Place user input and query output on separate lines
                 println!();
 
-                let path = get_tmp_source_file(&contents)?;
+                let file = get_tmp_source_file(&contents)?;
                 let language =
                     loader.select_language(None, current_dir, None, lib_info.as_ref())?;
                 let opts = QueryFileOptions {
@@ -1673,8 +1668,14 @@ impl Query {
                     print_time: self.time,
                     stdin: true,
                 };
-                query::query_file_at_path(&language, &path, "stdin", query_path, &opts, None)?;
-                fs::remove_file(path)?;
+                query::query_file_at_path(
+                    &language,
+                    file.path(),
+                    "stdin",
+                    query_path,
+                    &opts,
+                    None,
+                )?;
             }
         }
 
@@ -1783,7 +1784,7 @@ impl Highlight {
                 contents,
                 languages: language_names,
             } => {
-                let path = get_tmp_source_file(&contents)?;
+                let file = get_tmp_source_file(&contents)?;
 
                 let language = languages
                     .iter()
@@ -1798,18 +1799,24 @@ impl Highlight {
                 if let Some(highlight_config) =
                     language_config.highlight_config(language, self.query_paths.as_deref())?
                 {
-                    highlight::highlight(&loader, &path, &name, highlight_config, false, &options)?;
+                    highlight::highlight(
+                        &loader,
+                        file.path(),
+                        &name,
+                        highlight_config,
+                        false,
+                        &options,
+                    )?;
                 } else {
                     warn!("No syntax highlighting config found for test {name}");
                 }
-                fs::remove_file(path)?;
             }
 
             CliInput::Stdin(contents) => {
                 // Place user input and highlight output on separate lines
                 println!();
 
-                let path = get_tmp_source_file(&contents)?;
+                let file = get_tmp_source_file(&contents)?;
 
                 let (language, language_config) =
                     if let (Some(l), Some(lc)) = (language, language_configuration) {
@@ -1832,7 +1839,7 @@ impl Highlight {
                 {
                     highlight::highlight(
                         &loader,
-                        &path,
+                        file.path(),
                         "stdin",
                         highlight_config,
                         false,
@@ -1844,7 +1851,6 @@ impl Highlight {
                         current_dir.display()
                     );
                 }
-                fs::remove_file(path)?;
             }
         }
 
@@ -1926,7 +1932,7 @@ impl Tags {
                 contents,
                 languages: language_names,
             } => {
-                let path = get_tmp_source_file(&contents)?;
+                let file = get_tmp_source_file(&contents)?;
 
                 let languages = loader.languages_at_path(current_dir)?;
                 let language = languages
@@ -1940,18 +1946,17 @@ impl Tags {
                     .ok_or_else(|| anyhow!("No language configuration found in current path"))?;
 
                 if let Some(tags_config) = language_config.tags_config(language)? {
-                    tags::generate_tags(&path, &name, tags_config, false, &options)?;
+                    tags::generate_tags(file.path(), &name, tags_config, false, &options)?;
                 } else {
                     warn!("No tags config found for test {name}");
                 }
-                fs::remove_file(path)?;
             }
 
             CliInput::Stdin(contents) => {
                 // Place user input and tags output on separate lines
                 println!();
 
-                let path = get_tmp_source_file(&contents)?;
+                let file = get_tmp_source_file(&contents)?;
 
                 let (language, language_config) =
                     if let (Some(l), Some(lc)) = (language, language_configuration) {
@@ -1971,11 +1976,10 @@ impl Tags {
                     };
 
                 if let Some(tags_config) = language_config.tags_config(language)? {
-                    tags::generate_tags(&path, "stdin", tags_config, false, &options)?;
+                    tags::generate_tags(file.path(), "stdin", tags_config, false, &options)?;
                 } else {
                     warn!("No tags config found for path {}", current_dir.display());
                 }
-                fs::remove_file(path)?;
             }
         }
 
@@ -2064,11 +2068,6 @@ fn main() {
 fn run() -> Result<()> {
     logger::init();
 
-    let version = BUILD_SHA.map_or_else(
-        || BUILD_VERSION.to_string(),
-        |build_sha| format!("{BUILD_VERSION} ({build_sha})"),
-    );
-
     let cli = Command::new("tree-sitter")
         .help_template(concat!(
             "\n",
@@ -2079,7 +2078,7 @@ fn run() -> Result<()> {
             "{all-args}{after-help}\n",
             "\n"
         ))
-        .version(version)
+        .version(env!("TREE_SITTER_VERSION"))
         .subcommand_required(true)
         .arg_required_else_help(true)
         .disable_help_subcommand(true)
