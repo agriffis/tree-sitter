@@ -318,7 +318,13 @@ void ts_subtree_compress(
       grandchild.data.is_inline ||
       grandchild.ptr->child_count < 2 ||
       grandchild.ptr->ref_count > 1 ||
-      grandchild.ptr->symbol != symbol
+      grandchild.ptr->symbol != symbol ||
+      // Don't split a node holding a repetition's content (e.g. `seq($.a, $.b)`). Content never
+      // starts with the repetition, and error repeats have no content.
+      (
+        symbol != ts_builtin_sym_error_repeat &&
+        ts_subtree_symbol(ts_subtree_children(grandchild)[0]) != symbol
+      )
     ) break;
 
     ts_subtree_children(tree)[0] = ts_subtree_from_mut(grandchild);
@@ -333,6 +339,11 @@ void ts_subtree_compress(
     MutableSubtree child = ts_subtree_to_mut_unsafe(ts_subtree_children(tree)[0]);
     MutableSubtree grandchild = ts_subtree_to_mut_unsafe(ts_subtree_children(child)[child.ptr->child_count - 1]);
     ts_subtree_summarize_children(grandchild, language);
+    // `grandchild` now starts at its new first child, so it takes that child's parse state,
+    // unless it has none.
+    if (grandchild.ptr->parse_state != TS_TREE_STATE_NONE) {
+      grandchild.ptr->parse_state = ts_subtree_parse_state(ts_subtree_children(grandchild)[0]);
+    }
     ts_subtree_summarize_children(child, language);
     ts_subtree_summarize_children(tree, language);
   }
@@ -649,9 +660,9 @@ Subtree ts_subtree_edit(Subtree self, const TSInputEdit *input_edit, SubtreePool
   array_push(&stack, ((EditEntry) {
     .tree = &self,
     .edit = (Edit) {
-      .start = {input_edit->start_byte, input_edit->start_point},
-      .old_end = {input_edit->old_end_byte, input_edit->old_end_point},
-      .new_end = {input_edit->new_end_byte, input_edit->new_end_point},
+      .start = {.extent = input_edit->start_point, .bytes = input_edit->start_byte},
+      .old_end = {.extent = input_edit->old_end_point, .bytes = input_edit->old_end_byte},
+      .new_end = {.extent = input_edit->new_end_point, .bytes = input_edit->new_end_byte},
     },
   }));
 

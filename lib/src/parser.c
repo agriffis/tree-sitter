@@ -487,7 +487,9 @@ static bool ts_parser__can_reuse_first_leaf(
   // If the token was created in a state with the same set of lookaheads, it is reusable.
   if (
     table_entry->action_count > 0 &&
-    memcmp(&leaf_lex_mode, &current_lex_mode, sizeof(TSLexerMode)) == 0 &&
+    leaf_lex_mode.lex_state == current_lex_mode.lex_state &&
+    leaf_lex_mode.external_lex_state == current_lex_mode.external_lex_state &&
+    leaf_lex_mode.reserved_word_set_id == current_lex_mode.reserved_word_set_id &&
     (
       leaf_symbol != self->language->keyword_capture_token ||
       (!ts_subtree_is_keyword(tree) && ts_subtree_parse_state(tree) == state)
@@ -498,8 +500,15 @@ static bool ts_parser__can_reuse_first_leaf(
   if (ts_subtree_size(tree).bytes == 0 && leaf_symbol != ts_builtin_sym_end) return false;
 
   // If the current state allows external tokens or other tokens that conflict with this
-  // token, this token is not reusable.
-  return current_lex_mode.external_lex_state == 0 && table_entry->is_reusable;
+  // token, this token is not reusable. Neither is the word token if it was lexed under a
+  // different reserved word set.
+  return
+    current_lex_mode.external_lex_state == 0 &&
+    table_entry->is_reusable &&
+    (
+      leaf_symbol != self->language->keyword_capture_token ||
+      leaf_lex_mode.reserved_word_set_id == current_lex_mode.reserved_word_set_id
+    );
 }
 
 static Subtree ts_parser__lex(
@@ -1697,7 +1706,10 @@ static bool ts_parser__advance(
         }
 
         case TSParseActionTypeReduce: {
-          bool is_fragile = table_entry.action_count > 1;
+          const TSParseAction *last_action = &table_entry.actions[table_entry.action_count - 1];
+          uint32_t action_count = table_entry.action_count;
+          if (last_action->type == TSParseActionTypeShift && last_action->shift.repetition) action_count--;
+          bool is_fragile = action_count > 1;
           bool end_of_non_terminal_extra = lookahead.ptr == NULL;
           LOG("reduce sym:%s, child_count:%u", SYM_NAME(action.reduce.symbol), action.reduce.child_count);
           StackVersion reduction_version = ts_parser__reduce(
@@ -1769,11 +1781,16 @@ static bool ts_parser__advance(
 
     // If the current lookahead token is a keyword that is not valid, but the
     // default word token *is* valid, then treat the lookahead token as the word
-    // token instead.
+    // token instead. If the lookahead is a node reused from the old tree whose
+    // first leaf is such a keyword, break the node down to that leaf first.
+    Subtree first_leaf = lookahead;
+    while (ts_subtree_child_count(first_leaf) > 0) {
+      first_leaf = ts_subtree_children(first_leaf)[0];
+    }
     if (
-      ts_subtree_is_keyword(lookahead) &&
-      ts_subtree_symbol(lookahead) != self->language->keyword_capture_token &&
-      !ts_language_is_reserved_word(self->language, state, ts_subtree_symbol(lookahead))
+      ts_subtree_is_keyword(first_leaf) &&
+      ts_subtree_symbol(first_leaf) != self->language->keyword_capture_token &&
+      !ts_language_is_reserved_word(self->language, state, ts_subtree_symbol(first_leaf))
     ) {
       ts_language_table_entry(
         self->language,
@@ -1782,6 +1799,12 @@ static bool ts_parser__advance(
         &table_entry
       );
       if (table_entry.action_count > 0) {
+        if (ts_subtree_child_count(lookahead) > 0) {
+          // Every node above the keyword has the parse state the keyword was shifted from, which
+          // has an action for it, so it isn't `state`, and the breakdown reaches the keyword.
+          ts_parser__breakdown_lookahead(self, &lookahead, state, &self->reusable_node);
+          ts_assert(ts_subtree_child_count(lookahead) == 0);
+        }
         LOG(
           "switch from_keyword:%s, to_word_token:%s",
           TREE_NAME(lookahead),
@@ -2201,6 +2224,7 @@ TSTree *ts_parser_parse(
           ts_stack_position(self->stack, version).extent.column
         );
 
+        uint32_t position_before_advance = ts_stack_position(self->stack, version).bytes;
         if (!ts_parser__advance(self, version, allow_node_reuse)) {
           if (self->has_scanner_error) goto exit;
           return NULL;
@@ -2208,8 +2232,16 @@ TSTree *ts_parser_parse(
 
         LOG_STACK();
 
+        // Stop processing this version once it's past `last_position`, the furthest position any
+        // version has reached, or, for versions after the first, once this advance moved it to
+        // `last_position`. Shifting a zero-width token there doesn't move it, so it keeps going to
+        // the next token, as the first version does. Otherwise the stack could be condensed first,
+        // and the nodes this version then reduces on that token wouldn't be marked fragile.
         position = ts_stack_position(self->stack, version).bytes;
-        if (position > last_position || (version > 0 && position == last_position)) {
+        if (
+          position > last_position ||
+          (version > 0 && position == last_position && position > position_before_advance)
+        ) {
           last_position = position;
           break;
         }
