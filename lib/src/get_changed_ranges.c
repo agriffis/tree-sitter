@@ -189,6 +189,13 @@ static Length iterator_end_position(Iterator *self) {
   }
 }
 
+static uint32_t iterator_start_byte(const Iterator *self) {
+  const TreeCursorEntry *entry = array_back(&self->cursor.stack);
+  uint32_t result = entry->position.bytes;
+  if (!self->in_padding) result += ts_subtree_padding(*entry->subtree).bytes;
+  return result;
+}
+
 static uint32_t iterator_end_byte(const Iterator *self) {
   const TreeCursorEntry *entry = array_back(&self->cursor.stack);
   uint32_t result = entry->position.bytes + ts_subtree_padding(*entry->subtree).bytes;
@@ -385,6 +392,9 @@ static IteratorComparison iterator_compare(
     new_state == TS_TREE_STATE_NONE ||
     ((old_state == ERROR_STATE) != (new_state == ERROR_STATE)) ||
     old_error_cost != new_error_cost ||
+    // Error recovery isn't local, so a rebuilt subtree containing an error can differ inside even
+    // when its summary matches.
+    (old_error_cost > 0 && old_tree.ptr != new_tree.ptr) ||
     old_has_external_tokens != new_has_external_tokens ||
     ts_subtree_has_changes(old_tree) ||
     (
@@ -459,6 +469,18 @@ uint32_t ts_subtree_get_changed_ranges(
       position.bytes,
       iterator_end_byte(&old_iter)
     )) {
+      comparison = IteratorMayDiffer;
+    }
+
+    // A match only shows that a whole subtree is unchanged. Partway through one, after ascending
+    // past a change inside it, its remaining children can still differ.
+    if (
+      comparison == IteratorMatches &&
+      (
+        (!old_iter.in_padding && iterator_start_byte(&old_iter) < position.bytes) ||
+        (!new_iter.in_padding && iterator_start_byte(&new_iter) < position.bytes)
+      )
+    ) {
       comparison = IteratorMayDiffer;
     }
 
